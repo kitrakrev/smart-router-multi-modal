@@ -1,0 +1,350 @@
+# Auto-generated config for vl-routerbench
+# Models: 17
+# Source: /Users/karthikraja/Desktop/TEST/a10/router-prototype/benchmarks/vl_routerbench
+# Models discovered: ['Janus-Pro-1B', 'DeepSeek-VL2-Tiny', 'SmolVLM2', 'Kimi-VL-A3B-Thinking-2506', 'Phi-3.5-Vision', 'DeepSeek-VL2', 'Janus-Pro-7B', 'MiMo-VL-7B-RL', 'LLaVA-Next-Vicuna-7B', 'Qianfan-VL-8B', 'Pixtral-12B', 'Gemma3-27B', 'Qwen2.5-VL-32B-Instruct', 'Qwen2.5-VL-72B-Instruct', 'InternVL2.5-78B', 'Gemini-Flash-2.5', 'GPT-4o']
+#
+# Do not edit manually -- re-run generate_benchmark_config.py instead.
+
+models:
+- name: Janus-Pro-1B
+  provider: unknown
+  cost_per_1k_input: 5.0e-05
+  cost_per_1k_output: 0.0001
+  avg_latency_ms: 800
+  capabilities:
+  - vision
+  - text
+  - general
+  - general
+  quality_score: 0.75
+- name: DeepSeek-VL2-Tiny
+  provider: deepseek
+  cost_per_1k_input: 0.0001
+  cost_per_1k_output: 0.0002
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - general
+  - ocr
+  quality_score: 0.75
+- name: SmolVLM2
+  provider: unknown
+  cost_per_1k_input: 8.0e-05
+  cost_per_1k_output: 0.00015
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - general
+  quality_score: 0.75
+- name: Kimi-VL-A3B-Thinking-2506
+  provider: unknown
+  cost_per_1k_input: 0.00015
+  cost_per_1k_output: 0.0003
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - general
+  - math
+  quality_score: 0.75
+- name: Phi-3.5-Vision
+  provider: unknown
+  cost_per_1k_input: 0.0002
+  cost_per_1k_output: 0.0004
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - chart
+  - general
+  - ocr
+  quality_score: 0.75
+- name: DeepSeek-VL2
+  provider: deepseek
+  cost_per_1k_input: 0.0005
+  cost_per_1k_output: 0.001
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - general
+  - math
+  - ocr
+  quality_score: 0.75
+- name: Janus-Pro-7B
+  provider: unknown
+  cost_per_1k_input: 0.00025
+  cost_per_1k_output: 0.0005
+  avg_latency_ms: 800
+  capabilities:
+  - vision
+  - text
+  - general
+  - general
+  quality_score: 0.75
+- name: MiMo-VL-7B-RL
+  provider: unknown
+  cost_per_1k_input: 0.00025
+  cost_per_1k_output: 0.0005
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - general
+  - math
+  quality_score: 0.75
+- name: LLaVA-Next-Vicuna-7B
+  provider: unknown
+  cost_per_1k_input: 0.0002
+  cost_per_1k_output: 0.0004
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - general
+  quality_score: 0.75
+- name: Qianfan-VL-8B
+  provider: unknown
+  cost_per_1k_input: 0.0003
+  cost_per_1k_output: 0.0006
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - general
+  - ocr
+  quality_score: 0.75
+- name: Pixtral-12B
+  provider: unknown
+  cost_per_1k_input: 0.0004
+  cost_per_1k_output: 0.0008
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - chart
+  - general
+  - ocr
+  quality_score: 0.75
+- name: Gemma3-27B
+  provider: google
+  cost_per_1k_input: 0.0006
+  cost_per_1k_output: 0.0012
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - chart
+  - general
+  - math
+  - ocr
+  quality_score: 0.75
+- name: Qwen2.5-VL-32B-Instruct
+  provider: alibaba
+  cost_per_1k_input: 0.0008
+  cost_per_1k_output: 0.0016
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - chart
+  - general
+  - math
+  - ocr
+  quality_score: 0.75
+- name: Qwen2.5-VL-72B-Instruct
+  provider: alibaba
+  cost_per_1k_input: 0.002
+  cost_per_1k_output: 0.004
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - chart
+  - general
+  - math
+  - ocr
+  quality_score: 0.75
+- name: InternVL2.5-78B
+  provider: unknown
+  cost_per_1k_input: 0.0025
+  cost_per_1k_output: 0.005
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - chart
+  - general
+  - math
+  - ocr
+  quality_score: 0.75
+- name: Gemini-Flash-2.5
+  provider: google
+  cost_per_1k_input: 0.00015
+  cost_per_1k_output: 0.0006
+  avg_latency_ms: 250
+  capabilities:
+  - vision
+  - text
+  - general
+  - chart
+  - general
+  - math
+  - ocr
+  quality_score: 0.7
+- name: GPT-4o
+  provider: openai
+  cost_per_1k_input: 0.0025
+  cost_per_1k_output: 0.01
+  avg_latency_ms: 400
+  capabilities:
+  - vision
+  - text
+  - general
+  - chart
+  - general
+  - math
+  - ocr
+  quality_score: 0.9
+routing:
+  budget:
+    max_cost_per_query: 0.01
+    strategy: cheapest_capable
+    quality_threshold: 0.7
+  decisions:
+  - name: complex_reasoning
+    description: Complex math, proofs, logic, multi-step analysis
+    exemplars:
+    - prove that the square root of 2 is irrational
+    - derive the quadratic formula from first principles
+    - solve this system of differential equations
+    - find the eigenvalues and eigenvectors of matrix A
+    - prove by induction that the sum of first n integers equals n(n+1)/2
+    - analyze the time complexity of this algorithm
+    - what is the limit of this sequence as n approaches infinity
+    - explain why the halting problem is undecidable
+    - prove the fundamental theorem of calculus
+    - solve this optimization problem using Lagrange multipliers
+    require:
+    - reasoning
+    strategy: quality_first
+    config:
+      temperature: 0
+      max_tokens: 4096
+    min_similarity: 0.45
+  - name: code_generation
+    description: Writing, debugging, reviewing, or explaining code
+    exemplars:
+    - write a Python function to sort a list
+    - debug this JavaScript code
+    - implement a binary search tree in Java
+    - write a SQL query to find duplicate records
+    - create a REST API endpoint in FastAPI
+    - explain what this regex does
+    - refactor this function to be more efficient
+    - write unit tests for this class
+    - implement merge sort in C++
+    - fix the bug in this Python script
+    require:
+    - code
+    strategy: cheapest_capable
+    config:
+      temperature: 0.2
+      max_tokens: 2048
+    min_similarity: 0.4
+  - name: creative_writing
+    description: Stories, poems, creative content
+    exemplars:
+    - write a short story about a time traveler
+    - compose a haiku about autumn
+    - write a compelling product description
+    - create a dialogue between two historical figures
+    - write a poem about the ocean
+    - write a persuasive essay about climate change
+    require:
+    - text
+    strategy: cheapest_capable
+    config:
+      temperature: 0.9
+      max_tokens: 2048
+    min_similarity: 0.35
+  - name: simple_qa
+    description: Simple factual questions, trivia, definitions
+    exemplars:
+    - what is the capital of France
+    - who invented the telephone
+    - how many planets are in the solar system
+    - what year did World War 2 end
+    - define photosynthesis
+    - what is the boiling point of water
+    - who wrote Romeo and Juliet
+    - what is the largest ocean on earth
+    require:
+    - text
+    strategy: cheapest_capable
+    config:
+      temperature: 0.1
+      max_tokens: 200
+    min_similarity: 0.35
+  - name: general
+    description: General conversation, summarization, rewriting
+    exemplars:
+    - tell me about yourself
+    - what can you help me with
+    - summarize this article
+    - rewrite this email to be more professional
+    - explain this concept in simple terms
+    - give me advice on how to study effectively
+    - compare these two approaches
+    - help me plan my vacation
+    require:
+    - knowledge
+    strategy: cheapest_capable
+    config:
+      temperature: 0.7
+      max_tokens: 1024
+    min_similarity: 0.25
+  - name: vision_task
+    description: Image understanding, chart reading, visual QA
+    exemplars:
+    - what is shown in this image
+    - describe the chart and extract the data
+    - read the text in this screenshot
+    - analyze this diagram
+    - what breed is this dog in the photo
+    - compare these two images
+    require:
+    - vision
+    strategy: cheapest_capable
+    config:
+      temperature: 0.3
+      max_tokens: 1024
+    min_similarity: 0.35
+  safety_rules:
+  - name: jailbreak_block
+    if: safety > 0.7
+    action: block
+    reason: Safety risk detected
+  rules:
+  - default:
+      require:
+      - knowledge
+      strategy: cheapest_capable
+      config:
+        temperature: 0.7
+      reason: General query, cheapest knowledge-capable model

@@ -37,6 +37,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from signals import run_all_signals, SignalResult
 from router import Router
+from generate_benchmark_config import generate_config
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -379,8 +380,14 @@ async def run_benchmark():
 
     print(f"  Evaluating on: {len(test_indices):,} samples")
 
+    # Auto-generate config from benchmark data
+    print(f"\n  Auto-generating config from VL-RouterBench data...")
+    config_path = generate_config(
+        benchmark="vl-routerbench",
+        data_dir=str(DATASET_DIR),
+    )
+
     # Init our router (for signal pipeline comparison)
-    config_path = str(Path(__file__).parent / "config.yaml")
     router = Router(config_path=config_path)
     print(f"  Router models: {list(router.models.keys())}")
 

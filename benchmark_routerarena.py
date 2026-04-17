@@ -1,17 +1,14 @@
 """Benchmark the LLM Router against RouterArena ground truth data.
 
-Loads 8,400 queries from RouterArena's cached results for 3 models:
-  - gpt-4o-mini.jsonl       (8400 queries)
-  - claude-3-haiku.jsonl    (809 queries, subset)
-  - gemini-2.0-flash.jsonl  (809 queries, subset)
+Auto-discovers models from cached_results/*.jsonl files -- ZERO hardcoded
+model names. Config is auto-generated from the benchmark data via
+generate_benchmark_config.py.
 
-For the 809 overlap queries (all 3 models have scores):
-  -> Router picks one of the 3 models; we check if the picked model's
-     actual score >= best available score (correct if it picked the winner).
+For overlap queries (all models have scores):
+  -> Router picks a model; correct if picked model's score >= best score.
 
-For the 7591 GPT-only queries:
-  -> Only gpt-4o-mini has ground truth, so router MUST pick gpt-4o-mini
-     to be counted as correct.
+For primary-only queries (only one model has ground truth):
+  -> Router must pick that model to be counted as correct.
 
 Measures:
   - Routing accuracy
@@ -34,10 +31,11 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from signals import run_all_signals
 from router import Router
+from generate_benchmark_config import generate_config
 
 
 # ---------------------------------------------------------------------------
-# Config
+# Config -- auto-generated from benchmark data, ZERO hardcoded model names
 # ---------------------------------------------------------------------------
 
 CACHED_RESULTS_DIR = os.environ.get(
@@ -45,15 +43,28 @@ CACHED_RESULTS_DIR = os.environ.get(
     str(Path(__file__).parent.parent / "RouterArena" / "cached_results"),
 )
 
-# Cost per query (simulated: ~500 input + 300 output tokens)
-MODEL_COST_PER_QUERY = {
-    "gpt-4o-mini":              (500 / 1000) * 0.15 + (300 / 1000) * 0.60,   # $0.255
-    "gemini-2.0-flash-001":     (500 / 1000) * 0.10 + (300 / 1000) * 0.40,   # $0.17
-    "claude-3-haiku-20240307":  (500 / 1000) * 0.25 + (300 / 1000) * 1.25,   # $0.50
-    "BLOCKED": 0.0,
-}
+COST_FILE = os.environ.get(
+    "ROUTERARENA_COST_FILE",
+    str(Path(__file__).parent.parent / "RouterArena" / "model_cost" / "model_cost.json"),
+)
 
-ROUTERARENA_MODELS = {"gpt-4o-mini", "gemini-2.0-flash-001", "claude-3-haiku-20240307"}
+
+def _build_cost_table(config_path: str) -> dict[str, float]:
+    """Read the auto-generated config to build a cost-per-query table.
+
+    Uses avg 500 input + 300 output tokens per query (same assumption
+    as the original hand-written config).
+    """
+    import yaml as _yaml
+    with open(config_path) as f:
+        cfg = _yaml.safe_load(f)
+    costs = {}
+    for m in cfg.get("models", []):
+        name = m["name"]
+        cost = (500 / 1000) * m["cost_per_1k_input"] + (300 / 1000) * m["cost_per_1k_output"]
+        costs[name] = cost
+    costs["BLOCKED"] = 0.0
+    return costs
 
 
 # ---------------------------------------------------------------------------
@@ -73,34 +84,53 @@ def load_jsonl(path: str) -> dict[str, dict]:
 
 
 def load_all_ground_truth(cached_dir: str):
-    """Load all 3 cached result files and merge into a unified structure.
+    """Load all cached result files and merge into a unified structure.
+
+    Discovers models from .jsonl filenames -- ZERO hardcoded model names.
 
     Returns:
         all_queries: list of dicts with keys:
             global_index, question, metric, scores: {model: score}, has_all_models: bool
+        overlap_count: number of queries where all models have scores
+        model_names: list of discovered model names
     """
-    gpt_path = os.path.join(cached_dir, "gpt-4o-mini.jsonl")
-    claude_path = os.path.join(cached_dir, "claude-3-haiku-20240307.jsonl")
-    gemini_path = os.path.join(cached_dir, "gemini-2.0-flash-001.jsonl")
+    from glob import glob as _glob
 
-    gpt_data = load_jsonl(gpt_path)
-    claude_data = load_jsonl(claude_path)
-    gemini_data = load_jsonl(gemini_path)
+    jsonl_files = sorted(_glob(os.path.join(cached_dir, "*.jsonl")))
+    if not jsonl_files:
+        raise FileNotFoundError(f"No .jsonl files found in {cached_dir}")
 
-    overlap_indices = set(claude_data.keys()) & set(gemini_data.keys())
+    # Load all model data
+    model_data: dict[str, dict] = {}
+    for fpath in jsonl_files:
+        model_name = Path(fpath).stem
+        model_data[model_name] = load_jsonl(fpath)
+
+    model_names = list(model_data.keys())
+
+    # Find the model with the most queries (primary)
+    primary_model = max(model_names, key=lambda m: len(model_data[m]))
+    other_models = [m for m in model_names if m != primary_model]
+
+    # Overlap = indices present in ALL models
+    if other_models:
+        overlap_indices = set.intersection(*(set(model_data[m].keys()) for m in other_models))
+    else:
+        overlap_indices = set(model_data[primary_model].keys())
 
     all_queries = []
-    for idx, entry in gpt_data.items():
+    for idx, entry in model_data[primary_model].items():
         question = entry.get("question", "")
         metric = entry.get("evaluation_result", {}).get("metric", "unknown")
-        gpt_score = entry.get("evaluation_result", {}).get("score", 0.0)
+        primary_score = entry.get("evaluation_result", {}).get("score", 0.0)
 
-        scores = {"gpt-4o-mini": gpt_score}
+        scores = {primary_model: primary_score}
         has_all = idx in overlap_indices
 
         if has_all:
-            scores["claude-3-haiku-20240307"] = claude_data[idx].get("evaluation_result", {}).get("score", 0.0)
-            scores["gemini-2.0-flash-001"] = gemini_data[idx].get("evaluation_result", {}).get("score", 0.0)
+            for other in other_models:
+                other_entry = model_data[other].get(idx, {})
+                scores[other] = other_entry.get("evaluation_result", {}).get("score", 0.0)
 
         all_queries.append({
             "global_index": idx,
@@ -110,7 +140,7 @@ def load_all_ground_truth(cached_dir: str):
             "has_all_models": has_all,
         })
 
-    return all_queries, len(overlap_indices)
+    return all_queries, len(overlap_indices), model_names
 
 
 # ---------------------------------------------------------------------------
@@ -119,20 +149,44 @@ def load_all_ground_truth(cached_dir: str):
 
 async def benchmark():
     print("=" * 70)
-    print("  LLM Router Benchmark vs RouterArena Ground Truth (Fixed)")
+    print("  LLM Router Benchmark vs RouterArena Ground Truth")
+    print("  (auto-generated config from benchmark data)")
     print("=" * 70)
+
+    # Auto-generate config from benchmark data
+    print(f"\nAuto-generating config from benchmark data...")
+    config_path = generate_config(
+        benchmark="routerarena",
+        data_dir=CACHED_RESULTS_DIR,
+        cost_file=COST_FILE,
+    )
+
+    # Build cost table from auto-generated config (no hardcoded costs)
+    MODEL_COST_PER_QUERY = _build_cost_table(config_path)
 
     # Load data
     print(f"\nLoading ground truth from: {CACHED_RESULTS_DIR}")
-    all_queries, overlap_count = load_all_ground_truth(CACHED_RESULTS_DIR)
-    gpt_only_count = len(all_queries) - overlap_count
+    all_queries, overlap_count, discovered_models = load_all_ground_truth(CACHED_RESULTS_DIR)
+    primary_only_count = len(all_queries) - overlap_count
     print(f"Total queries: {len(all_queries)}")
-    print(f"  Overlap (3-model): {overlap_count}")
-    print(f"  GPT-only:          {gpt_only_count}")
+    print(f"  Overlap ({len(discovered_models)}-model): {overlap_count}")
+    print(f"  Primary-only:      {primary_only_count}")
+    print(f"  Models discovered: {discovered_models}")
 
-    # Init router with RouterArena-specific config
-    config_path = str(Path(__file__).parent / "config_routerarena.yaml")
+    # Validate: all models in config have ground truth
     router = Router(config_path=config_path)
+    config_models = set(router.models.keys())
+    gt_models = set(discovered_models)
+    if config_models != gt_models:
+        missing_gt = config_models - gt_models
+        extra_gt = gt_models - config_models
+        if missing_gt:
+            print(f"  WARNING: models in config but not in ground truth: {missing_gt}")
+        if extra_gt:
+            print(f"  WARNING: models in ground truth but not in config: {extra_gt}")
+    else:
+        print(f"  VALIDATED: all {len(config_models)} config models have ground truth")
+
     print(f"\nRouter loaded with models: {list(router.models.keys())}")
     print(f"Routing rules: {len(router.rules)}")
 
@@ -149,11 +203,16 @@ async def benchmark():
     score_by_model: defaultdict[str, list[float]] = defaultdict(list)
     metric_counts: Counter = Counter()
 
+    # Determine the primary model (one with most queries)
+    primary_model = max(discovered_models, key=lambda m: sum(
+        1 for q in all_queries if m in q["scores"]
+    ))
+
     # Breakdown stats
     overlap_correct = 0
     overlap_total = 0
-    gptonly_correct = 0
-    gptonly_total = 0
+    primary_only_correct = 0
+    primary_only_total = 0
 
     # Progress
     try:
@@ -217,13 +276,13 @@ async def benchmark():
             else:
                 score_by_model[selected].append(0.0)
         else:
-            gptonly_total += 1
-            # Only gpt-4o-mini has ground truth.
-            if selected == "gpt-4o-mini":
+            primary_only_total += 1
+            # Only the primary model has ground truth.
+            if selected == primary_model:
                 correct_picks += 1
-                gptonly_correct += 1
+                primary_only_correct += 1
                 optimal_picks += 1
-                score_by_model[selected].append(scores["gpt-4o-mini"])
+                score_by_model[selected].append(scores[primary_model])
             else:
                 # We don't know this model's score -> can't verify -> wrong
                 score_by_model[selected].append(0.0)
@@ -243,13 +302,13 @@ async def benchmark():
     p99_latency = sorted(latencies)[int(len(latencies) * 0.99)] if latencies else 0
     cost_per_1k = (total_cost / max(evaluated, 1)) * 1000
 
-    gt_cost_per_1k = MODEL_COST_PER_QUERY["gpt-4o-mini"] * 1000
+    gt_cost_per_1k = MODEL_COST_PER_QUERY[primary_model] * 1000
 
     accuracy = correct_picks / max(evaluated, 1)
     optimal_rate = optimal_picks / max(evaluated, 1)
 
     overlap_acc = overlap_correct / max(overlap_total, 1)
-    gptonly_acc = gptonly_correct / max(gptonly_total, 1)
+    primary_only_acc = primary_only_correct / max(primary_only_total, 1)
 
     # ---------------------------------------------------------------------------
     # Print results
@@ -266,10 +325,10 @@ async def benchmark():
     print(f"{'Evaluated':<40} {evaluated:>15,}")
     print(f"{'Overall routing accuracy':<40} {accuracy:>14.1%}")
     print(f"{'  Overlap (3-model) accuracy':<40} {overlap_acc:>14.1%}")
-    print(f"{'  GPT-only accuracy':<40} {gptonly_acc:>14.1%}")
+    print(f"{'  Primary-only accuracy':<40} {primary_only_acc:>14.1%}")
     print(f"{'Optimal model selection':<40} {optimal_rate:>14.1%}")
     print(f"{'Cost per 1K queries (router)':<40} {'$' + f'{cost_per_1k:.4f}':>15}")
-    print(f"{'Cost per 1K queries (all gpt-mini)':<40} {'$' + f'{gt_cost_per_1k:.4f}':>15}")
+    print(f"{'Cost per 1K queries (all ' + primary_model + ')':<40} {'$' + f'{gt_cost_per_1k:.4f}':>15}")
     print(f"{'Cost ratio vs all-mini':<40} {cost_per_1k / gt_cost_per_1k:>14.2f}x")
     print(f"{'Avg routing latency':<40} {avg_latency:>12.2f} ms")
     print(f"{'P50 routing latency':<40} {p50_latency:>12.2f} ms")
@@ -318,13 +377,13 @@ async def benchmark():
 
     results = {
         "benchmark": "RouterArena",
-        "config": "config_routerarena.yaml",
+        "config": config_path,
         "total_queries": total,
         "blocked": blocked_count,
         "evaluated": evaluated,
         "routing_accuracy": round(accuracy, 4),
         "overlap_accuracy": round(overlap_acc, 4),
-        "gptonly_accuracy": round(gptonly_acc, 4),
+        "primary_only_accuracy": round(primary_only_acc, 4),
         "optimal_selection_rate": round(optimal_rate, 4),
         "cost_per_1k_router": round(cost_per_1k, 4),
         "cost_per_1k_baseline": round(gt_cost_per_1k, 4),
@@ -353,7 +412,7 @@ async def benchmark():
     print(f"  {'Router':<30} {'Accuracy':>10} {'Cost/1K':>12} {'Latency':>10}")
     print(f"  {'-'*30} {'-'*10} {'-'*12} {'-'*10}")
     print(f"  {'LLM Router (fixed)':<30} {accuracy:>9.1%} {'$'+f'{cost_per_1k:.4f}':>12} {avg_latency:>8.2f}ms")
-    print(f"  {'All gpt-4o-mini':<30} {'—':>10} {'$'+f'{gt_cost_per_1k:.4f}':>12} {'—':>10}")
+    print(f"  {'All ' + primary_model:<30} {'—':>10} {'$'+f'{gt_cost_per_1k:.4f}':>12} {'—':>10}")
     print("=" * 70)
 
     # ---------------------------------------------------------------------------

@@ -575,8 +575,6 @@ class Router:
                         model_name = cheapest.name
 
                 inference_config = dict(decision_config.get("config", {}))
-                    inference_config.pop("enable_reasoning", None)
-                    inference_config.pop("thinking_tokens", None)
 
                 return RouterDecision(
                     selected_model=model_name,

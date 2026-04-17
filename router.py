@@ -114,11 +114,13 @@ class DecisionMatcher:
     def match(self, query_text: str) -> tuple[str, float]:
         """Find best matching decision for a query.
 
-        Returns (decision_name, similarity_score).
-        Falls back to 'general' with 0.0 if nothing matches.
+        Always returns highest scoring decision — no threshold cutoff,
+        no default fallback. Embedding match handles ALL queries.
         """
         if not self.decision_embeddings or not query_text.strip():
-            return ("general", 0.0)
+            # Pick first decision as absolute fallback (shouldn't happen)
+            first = next(iter(self.decision_embeddings), "general")
+            return (first, 0.0)
 
         self._ensure_model()
         query_emb = self.model.encode(query_text)
@@ -126,18 +128,24 @@ class DecisionMatcher:
         if norm > 0:
             query_emb = query_emb / norm
 
+        # Score ALL decisions, apply optional min_similarity as soft preference
         scores: dict[str, float] = {}
+        all_scores: dict[str, float] = {}
         for name, data in self.decision_embeddings.items():
             sim = float(np.dot(query_emb, data["centroid"]))
-            min_sim = data["config"].get("min_similarity", 0.3)
+            all_scores[name] = sim
+            min_sim = data["config"].get("min_similarity", 0.0)
             if sim >= min_sim:
                 scores[name] = sim
 
-        if not scores:
-            return ("general", 0.0)
+        # If any decision meets threshold, use it
+        if scores:
+            best = max(scores, key=scores.get)
+            return (best, scores[best])
 
-        best = max(scores, key=scores.get)
-        return (best, scores[best])
+        # Otherwise pick highest overall (no fallback to "general")
+        best = max(all_scores, key=all_scores.get)
+        return (best, all_scores[best])
 
 
 # ---------------------------------------------------------------------------

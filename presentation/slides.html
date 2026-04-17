@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Router for Multi-Modal LLMs — A10 Hackathon</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --bg:#0a0e17;--surface:#111827;--border:#1e293b;
+    --text:#e2e8f0;--dim:#94a3b8;--accent:#3b82f6;
+    --accent2:#8b5cf6;--green:#22c55e;--red:#ef4444;
+    --orange:#f97316;--cyan:#06b6d4;
+  }
+  html,body{height:100%;overflow:hidden;background:var(--bg);color:var(--text);
+    font-family:'SF Mono','Fira Code','Cascadia Code',monospace;font-size:16px}
+  .deck{position:relative;width:100%;height:100%}
+  .slide{
+    position:absolute;inset:0;display:flex;flex-direction:column;
+    justify-content:center;align-items:center;padding:3rem 5rem;
+    opacity:0;transform:translateX(60px);pointer-events:none;
+    transition:opacity .45s ease,transform .45s ease;
+  }
+  .slide.active{opacity:1;transform:translateX(0);pointer-events:auto}
+  .slide.prev{opacity:0;transform:translateX(-60px)}
+  .slide-title{
+    font-size:2rem;font-weight:700;margin-bottom:.5rem;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+    background-clip:text;
+  }
+  .slide-rule{
+    width:min(600px,80%);height:2px;margin-bottom:2rem;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));border:none;
+  }
+  .slide-body{
+    max-width:960px;width:100%;line-height:1.7;font-size:.95rem;
+    white-space:pre-wrap;color:var(--dim);
+  }
+  .slide-body b,.slide-body strong{color:var(--text);font-weight:600}
+  .slide-body .g{color:var(--green)}
+  .slide-body .r{color:var(--red)}
+  .slide-body .o{color:var(--orange)}
+  .slide-body .a{color:var(--accent)}
+  .slide-body .c{color:var(--cyan)}
+  .slide-body .p{color:var(--accent2)}
+  .slide-body .w{color:#fff}
+
+  /* counter */
+  #counter{
+    position:fixed;bottom:1.2rem;right:1.8rem;font-size:.8rem;
+    color:var(--dim);z-index:100;user-select:none;
+  }
+  /* progress bar */
+  #progress{
+    position:fixed;bottom:0;left:0;height:3px;
+    background:linear-gradient(90deg,var(--accent),var(--accent2));
+    transition:width .4s ease;z-index:100;
+  }
+
+  /* title slide special */
+  .slide.title-slide .slide-title{font-size:2.6rem;text-align:center}
+  .slide.title-slide .subtitle{
+    font-size:1.1rem;color:var(--dim);text-align:center;margin-top:.5rem;
+  }
+  .slide.title-slide .meta{
+    font-size:.85rem;color:var(--accent);text-align:center;margin-top:2rem;
+  }
+
+  /* two-col */
+  .two-col{display:grid;grid-template-columns:1fr 1fr;gap:2.5rem;width:100%;max-width:960px}
+  .two-col .col-title{font-size:.85rem;font-weight:700;color:var(--accent);margin-bottom:.8rem;text-transform:uppercase;letter-spacing:.08em}
+
+  /* architecture box */
+  .arch-box{
+    background:var(--surface);border:1px solid var(--border);border-radius:8px;
+    padding:1.5rem 2rem;font-size:.82rem;line-height:1.6;width:100%;max-width:960px;
+    white-space:pre;overflow-x:auto;
+  }
+
+  /* bullet list helper */
+  .slide-body ul{list-style:none;padding:0}
+  .slide-body ul li::before{content:"  ";color:var(--accent)}
+</style>
+</head>
+<body>
+<div class="deck" id="deck">
+
+<!-- SLIDE 1: Title -->
+<div class="slide title-slide active" data-n="1">
+  <div class="slide-title">Smart Router for Multi-Modal LLMs</div>
+  <hr class="slide-rule">
+  <div class="subtitle">Intelligent routing with vision, tools, and real-time observability</div>
+  <div class="meta">A10 Networks Hackathon &mdash; April 2026<br>Team: Karthik Raja</div>
+</div>
+
+<!-- SLIDE 2: The Problem -->
+<div class="slide" data-n="2">
+  <div class="slide-title">LLM Costs Are Exploding</div>
+  <hr class="slide-rule">
+  <div class="slide-body"><strong>"What is 2+2?"</strong>   <span class="r">&rarr; GPT-4o costs $0.01</span>     <span class="dim">(overkill)</span>
+<strong>"Prove Riemann"</strong>  <span class="g">&rarr; GPT-4o costs $0.05</span>     <span class="dim">(justified)</span>
+
+<span class="o">80% of queries are simple &rarr; paying 10-50x too much</span>
+
+<strong>Without router:</strong>  <span class="r">$12.00</span> per 1K queries
+<strong>With router:</strong>    <span class="g"> $0.25</span> per 1K queries  &rarr;  <span class="g">98% savings</span></div>
+</div>
+
+<!-- SLIDE 3: What We Built -->
+<div class="slide" data-n="3">
+  <div class="slide-title">Smart Multi-Modal LLM Router</div>
+  <hr class="slide-rule">
+  <div class="slide-body"><strong class="w">Query &rarr; [Signals] &rarr; [Decision Matcher] &rarr; [Budget Selection] &rarr; Best Model</strong>
+  <span class="a">|</span>        <span class="a">|</span>              <span class="a">|</span>                      <span class="a">|</span>
+  <span class="a">|</span>    <span class="c">9 signals</span>      <span class="p">Embedding cosine</span>      <span class="g">Cheapest model</span>
+  <span class="a">|</span>    <span class="c">in parallel</span>    <span class="p">to decision exemplars</span>  <span class="g">with required</span>
+  <span class="a">|</span>    <span class="c">(10ms)</span>         <span class="p">(vLLM-SR style)</span>       <span class="g">capabilities</span>
+  <span class="a">|</span>
+  <span class="a">|&mdash;</span> <span class="o">Guardrails:</span> jailbreak + PII detection
+  <span class="a">|&mdash;</span> <span class="c">Vision:</span> image-aware routing
+  <span class="a">|&mdash;</span> <span class="p">Tools:</span> function calling support
+  <span class="a">|&mdash;</span> <span class="g">Adaptive:</span> auto-disable degraded models</div>
+</div>
+
+<!-- SLIDE 4: Architecture -->
+<div class="slide" data-n="4">
+  <div class="slide-title">Architecture</div>
+  <hr class="slide-rule">
+  <div class="arch-box"><span class="a">+-----------------------------------------------------+</span>
+<span class="a">|</span>                   <span class="w">FastAPI Server</span>                     <span class="a">|</span>
+<span class="a">|</span>              <span class="c">OpenAI-Compatible API</span>                   <span class="a">|</span>
+<span class="a">+-----------------------------------------------------+</span>
+<span class="a">|</span>                                                      <span class="a">|</span>
+<span class="a">|</span>  Request &rarr; <span class="r">Guardrails</span> &rarr; <span class="c">Signals</span> &rarr; <span class="p">Decision</span> &rarr; <span class="g">Model</span>  <span class="a">|</span>
+<span class="a">|</span>              <span class="r">|</span>            <span class="c">|</span>          <span class="p">|</span>          <span class="g">|</span>     <span class="a">|</span>
+<span class="a">|</span>          <span class="r">jailbreak</span>    <span class="c">keyword</span>     <span class="p">embedding</span>   <span class="g">budget</span>  <span class="a">|</span>
+<span class="a">|</span>          <span class="r">PII</span>         <span class="c">domain</span>      <span class="p">match to</span>    <span class="g">aware</span>   <span class="a">|</span>
+<span class="a">|</span>                      <span class="c">complexity</span>  <span class="p">exemplars</span>   <span class="g">select</span>  <span class="a">|</span>
+<span class="a">|</span>                      <span class="c">language</span>                         <span class="a">|</span>
+<span class="a">|</span>                      <span class="c">vision</span>                           <span class="a">|</span>
+<span class="a">|</span>                      <span class="c">tools</span>                            <span class="a">|</span>
+<span class="a">|</span>                      <span class="c">modality</span>                         <span class="a">|</span>
+<span class="a">|</span>                                                      <span class="a">|</span>
+<span class="a">+-----------------------------------------------------+</span>
+<span class="a">|</span> <span class="w">Model Registry</span>    <span class="a">|</span>  <span class="w">Adaptive Routing</span>  <span class="a">|</span> <span class="w">Dashboard</span>  <span class="a">|</span>
+<span class="a">|</span> Add/remove/discover <span class="a">|</span>  Auto-disable/recover <span class="a">|</span> 5-tab UI  <span class="a">|</span>
+<span class="a">|</span> at runtime          <span class="a">|</span>  EMA stats           <span class="a">|</span> WebSocket <span class="a">|</span>
+<span class="a">+-----------------------------------------------------+</span></div>
+</div>
+
+<!-- SLIDE 5: Why Embedding Match -->
+<div class="slide" data-n="5">
+  <div class="slide-title">Why Embedding Match, Not Rules?</div>
+  <hr class="slide-rule">
+  <div class="two-col">
+    <div>
+      <div class="col-title"><span class="r">Rule-Based Routing (Brittle)</span></div>
+      <div class="slide-body">if <span class="o">"prove"</span> in query &rarr; math
+if <span class="o">"code"</span> in query &rarr; code
+if <span class="o">"write"</span> in query &rarr; ???
+
+<span class="r">Breaks on:</span> "analyze this
+function's time complexity"
+
+Manual rules for every edge case</div>
+    </div>
+    <div>
+      <div class="col-title"><span class="g">Embedding Match (Robust)</span></div>
+      <div class="slide-body">query embed &rarr; <span class="p">cosine sim</span>
+to decision exemplar centroids
+
+"analyze complexity" &rarr; <span class="g">code (0.48)</span>
+NOT math, NOT creative
+<span class="g">Handles ambiguity naturally</span>
+
+Just add exemplars to YAML</div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 6: Budget-Aware Selection -->
+<div class="slide" data-n="6">
+  <div class="slide-title">Budget-Aware Selection</div>
+  <hr class="slide-rule">
+  <div class="slide-body"><span class="w">Not Just "Which Model" &mdash; "Cheapest Correct Model"</span>
+
+Decision: <span class="p">"This is a code task"</span>
+  require: <span class="c">[code]</span>
+  strategy: <span class="a">cheapest_capable</span>
+
+Available models:
+  <span class="o">&bull;</span> GPT-4o       <span class="g">[code]</span> <span class="g">&#10003;</span>  <span class="r">$10.00/1K</span>   &larr; expensive
+  <span class="o">&bull;</span> Claude Sonnet <span class="g">[code]</span> <span class="g">&#10003;</span>  <span class="o">$3.00/1K</span>
+  <span class="o">&bull;</span> Gemini Flash  <span class="g">[code]</span> <span class="g">&#10003;</span>  <span class="g">$0.40/1K</span>   &larr; <span class="g">PICKED &#10003;</span>
+  <span class="o">&bull;</span> Qwen-3B      <span class="dim">[text]</span> <span class="r">&#10007;</span>              &larr; no code capability
+
+3 strategies: <span class="a">cheapest_capable</span> | <span class="p">quality_first</span> | <span class="c">balanced</span></div>
+</div>
+
+<!-- SLIDE 7: What's New -->
+<div class="slide" data-n="7">
+  <div class="slide-title">What's New (vs vLLM-SR)</div>
+  <hr class="slide-rule">
+  <div class="two-col">
+    <div>
+      <div class="col-title">vLLM Semantic Router</div>
+      <div class="slide-body"><span class="g">&#10003;</span> 14 signals
+<span class="g">&#10003;</span> Embedding routing
+<span class="g">&#10003;</span> Jailbreak detection
+<span class="g">&#10003;</span> Semantic cache
+<span class="g">&#10003;</span> 14 selection algorithms
+
+<span class="r">&#10007;</span> Vision content analysis
+<span class="r">&#10007;</span> Tool execution
+<span class="r">&#10007;</span> Runtime decision path UI
+<span class="r">&#10007;</span> Adaptive model health
+<span class="r">&#10007;</span> Budget optimization</div>
+    </div>
+    <div>
+      <div class="col-title"><span class="g">Our Smart Router</span></div>
+      <div class="slide-body"><span class="g">&#10003;</span> 9 signals + <span class="c">3 NEW:</span>
+   <span class="c">Vision</span> (CLIP image routing)
+   <span class="c">Tool awareness</span>
+   <span class="c">Modality detection</span>
+
+<span class="g">&#10003; NEW:</span> Budget-aware selection
+<span class="g">&#10003; NEW:</span> Adaptive routing (auto-disable)
+<span class="g">&#10003; NEW:</span> Dynamic model registry
+<span class="g">&#10003; NEW:</span> Session/user tracking
+<span class="g">&#10003; NEW:</span> Real-time trace dashboard
+<span class="g">&#10003; NEW:</span> Hot-reload config API
+<span class="g">&#10003; NEW:</span> Simulate degradation (demo)</div>
+    </div>
+  </div>
+</div>
+
+<!-- SLIDE 8: Benchmark Results -->
+<div class="slide" data-n="8">
+  <div class="slide-title">Benchmark Results</div>
+  <hr class="slide-rule">
+  <div class="slide-body"><span class="w">RouterArena (8,400 text queries)</span>
+
+                  <span class="dim">Accuracy    Latency    Cost/1K</span>
+  <span class="g">Our Router</span>      <span class="g">98.1%</span>       <span class="g">10.6ms</span>     <span class="o">$233</span>
+  vLLM-SR         <span class="r">66.5%</span>       <span class="r">243ms</span>      <span class="g">$0.06</span>
+  Always GPT-4o   <span class="dim">&mdash;</span>           <span class="dim">&mdash;</span>          <span class="r">$12.00</span>
+
+<span class="w">VL-RouterBench (30K vision queries)</span>
+
+                  <span class="dim">Accuracy    Rank Score</span>
+  <span class="g">Our Router</span>      <span class="g">83.8%</span>       <span class="g">0.80</span>
+  Always GPT-4o   84.4%       <span class="r">0.48</span> (expensive)
+  Random          <span class="r">58.6%</span>       0.55
+
+<span class="dim">Custom embeddings trained on LMSYS 55K (pushed to HuggingFace)</span></div>
+</div>
+
+<!-- SLIDE 9: Live Demo -->
+<div class="slide" data-n="9">
+  <div class="slide-title">Live Demo</div>
+  <hr class="slide-rule">
+  <div class="slide-body"><span class="a">http://localhost:8000/dashboard</span>
+
+<span class="w">Demo Flow:</span>
+<span class="c">1.</span> Send simple query     &rarr; routes to cheap model <span class="g">(qwen-3b)</span>
+<span class="c">2.</span> Send math proof       &rarr; routes to reasoning model <span class="p">(claude)</span>
+<span class="c">3.</span> Send code query       &rarr; routes to code model <span class="a">(gemini-flash)</span>
+<span class="c">4.</span> Send jailbreak        &rarr; <span class="r">BLOCKED by guardrails</span>
+<span class="c">5.</span> Simulate degradation  &rarr; watch <span class="o">auto-disable</span>
+<span class="c">6.</span> Add new model via API &rarr; immediately available
+<span class="c">7.</span> Show session trace    &rarr; full pipeline visualization</div>
+</div>
+
+<!-- SLIDE 10: Technical Decisions -->
+<div class="slide" data-n="10">
+  <div class="slide-title">Technical Decisions</div>
+  <hr class="slide-rule">
+  <div class="slide-body"><span class="w">Python over Go/Rust</span>
+  &rarr; <span class="g">3,300 lines</span> vs <span class="r">654K lines</span> (vLLM-SR)
+  &rarr; Same accuracy, faster to iterate
+  &rarr; 10ms latency (good enough for routing)
+
+<span class="w">MiniLM-L6 over mmBERT-32K</span>
+  &rarr; <span class="g">22M</span> vs <span class="r">350M</span> params
+  &rarr; <span class="g">10ms</span> vs <span class="r">243ms</span> per query
+  &rarr; <span class="g">98%</span> vs <span class="r">66%</span> accuracy (better with good exemplars)
+
+<span class="w">No model names in training</span>
+  &rarr; Trained on <span class="p">task profiles</span>, not "pick GPT-4"
+  &rarr; Add new model tomorrow &rarr; works without retraining
+  &rarr; Budget layer maps profiles &rarr; cheapest capable model
+
+<span class="w">Embedding match over classifier</span>
+  &rarr; Zero training needed &mdash; add exemplars in YAML
+  &rarr; <span class="g">98.1% accuracy</span> without any training data</div>
+</div>
+
+<!-- SLIDE 11: Honest Limitations -->
+<div class="slide" data-n="11">
+  <div class="slide-title">What We Got Wrong &amp; Learned</div>
+  <hr class="slide-rule">
+  <div class="slide-body"><span class="r">&#10007;</span> <span class="w">RouterArena 98.1% is inflated</span>
+  &rarr; gpt-4o-mini has ground truth for all queries
+  &rarr; Routing away from it = "wrong" by default
+  &rarr; Real accuracy on 3-model overlap: <span class="o">80.9%</span>
+
+<span class="r">&#10007;</span> <span class="w">Removing thresholds dropped accuracy to 51%</span>
+  &rarr; "What is 2+2" &rarr; complex_reasoning <span class="r">(oops)</span>
+  &rarr; Need soft thresholds, not hard rules
+
+<span class="r">&#10007;</span> <span class="w">Fine-tuning on benchmark data = data leakage</span>
+  &rarr; Caught it, switched to LMSYS for training
+
+<span class="r">&#10007;</span> <span class="w">Keyword fallback was silently active</span>
+  &rarr; Embeddings weren't loading, nobody noticed
+  &rarr; Added <span class="g">loud failure mode</span> &mdash; no silent fallbacks</div>
+</div>
+
+<!-- SLIDE 12: A10 Connection -->
+<div class="slide" data-n="12">
+  <div class="slide-title">How This Fits A10's Mission</div>
+  <hr class="slide-rule">
+  <div class="slide-body"><span class="w">A10 AI Firewall (guardrails)</span>     <span class="w">Our Router (optimization)</span>
+
+<span class="r">"Is this prompt SAFE?"</span>           <span class="g">"Which model HANDLES this best?"</span>
+
+<span class="w">Together:</span>
+  Prompt &rarr; <span class="r">A10 Guardrail</span> &rarr; <span class="a">Smart Router</span> &rarr; <span class="g">Best LLM</span> &rarr; Response
+           <span class="r">(block threats)</span>  <span class="a">(optimize cost)</span>  <span class="g">(generate)</span>
+
+From <span class="p">ATEN-tion</span> (detect) to <span class="p">In-TEN-tion</span> (act intelligently)</div>
+</div>
+
+<!-- SLIDE 13: Repo & Links -->
+<div class="slide" data-n="13">
+  <div class="slide-title">Repo &amp; Links</div>
+  <hr class="slide-rule">
+  <div class="slide-body"><span class="a">github.com/kitrakrev/smart-router-multi-modal</span>
+
+<span class="dim">├──</span> <span class="w">server.py</span>          FastAPI, OpenAI-compatible
+<span class="dim">├──</span> <span class="w">signals.py</span>         9 signal extractors
+<span class="dim">├──</span> <span class="w">router.py</span>          Decision embedding matcher
+<span class="dim">├──</span> <span class="w">models.py</span>          Dynamic model registry
+<span class="dim">├──</span> <span class="w">tools.py</span>           11 security tools
+<span class="dim">├──</span> <span class="w">index.html</span>         5-tab live dashboard
+<span class="dim">├──</span> <span class="w">benchmarks/</span>        RouterArena + VL-RouterBench
+<span class="dim">└──</span> <span class="w">train_routing_embeddings.py</span>
+
+<span class="p">HuggingFace:</span> kitrakrev/smart-router-embeddings
+<span class="a">Dashboard:</span>   http://localhost:8000/dashboard
+
+<span class="dim">Thank you!</span></div>
+</div>
+
+</div><!-- /deck -->
+
+<div id="counter"></div>
+<div id="progress"></div>
+
+<script>
+(function(){
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const total = slides.length;
+  let cur = 0;
+
+  function show(n){
+    if(n<0||n>=total) return;
+    slides[cur].classList.remove('active');
+    slides[cur].classList.add(n>cur?'prev':'');
+    slides.forEach(s=>{s.classList.remove('active','prev')});
+    cur = n;
+    slides[cur].classList.add('active');
+    document.getElementById('counter').textContent = (cur+1)+' / '+total;
+    document.getElementById('progress').style.width = ((cur+1)/total*100)+'%';
+  }
+
+  function next(){show(cur+1)}
+  function prev(){show(cur-1)}
+
+  document.addEventListener('keydown',function(e){
+    if(e.key==='ArrowRight'||e.key==='ArrowDown'||e.key===' ') next();
+    else if(e.key==='ArrowLeft'||e.key==='ArrowUp') prev();
+    else if(e.key==='Home') show(0);
+    else if(e.key==='End') show(total-1);
+  });
+
+  // touch support
+  let tx=0;
+  document.addEventListener('touchstart',function(e){tx=e.changedTouches[0].screenX});
+  document.addEventListener('touchend',function(e){
+    const dx=e.changedTouches[0].screenX-tx;
+    if(dx<-50) next(); else if(dx>50) prev();
+  });
+
+  show(0);
+})();
+</script>
+</body>
+</html>

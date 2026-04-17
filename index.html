@@ -262,6 +262,48 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .guardrail-stat .gs-value{font-size:18px;font-weight:700;font-family:var(--mono)}
 
 /* ------------------------------------------------------------------ */
+/* TAB 5: Sessions                                                     */
+/* ------------------------------------------------------------------ */
+.sessions-layout{display:grid;grid-template-columns:280px 1fr;gap:0;flex:1;overflow:hidden}
+.session-sidebar{overflow-y:auto;border-right:1px solid var(--border);background:var(--bg2)}
+.session-sidebar .panel-header{padding:12px 16px}
+.session-item{padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s}
+.session-item:hover{background:var(--bg3)}
+.session-item.selected{background:var(--bg3);border-left:3px solid var(--accent)}
+.session-item .s-id{font-family:var(--mono);font-size:12px;color:var(--accent);font-weight:600}
+.session-item .s-user{font-size:11px;color:var(--text2);margin-left:6px}
+.session-item .s-meta{font-size:11px;color:var(--text2);margin-top:4px;display:flex;gap:8px;align-items:center}
+.session-item .s-dot{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.session-item .s-dot.active{background:var(--green)}
+.session-item .s-dot.idle{background:var(--text2);opacity:.5}
+.session-main{overflow-y:auto;padding:20px 24px}
+.session-header{margin-bottom:20px}
+.session-header h2{font-size:16px;font-weight:600;color:var(--text);margin-bottom:4px}
+.session-header .sh-meta{font-size:12px;color:var(--text2);display:flex;gap:16px;flex-wrap:wrap}
+.session-section{background:var(--bg2);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px}
+.session-section h3{font-size:12px;text-transform:uppercase;letter-spacing:1px;color:var(--text2);margin-bottom:12px}
+.trace-timeline-item{padding:10px 0;border-bottom:1px solid var(--border);font-size:13px}
+.trace-timeline-item:last-child{border-bottom:none}
+.tti-time{font-family:var(--mono);font-size:11px;color:var(--text2);margin-right:8px}
+.tti-query{color:var(--text);font-style:italic}
+.tti-route{font-family:var(--mono);font-size:12px;margin-top:4px;color:var(--text2)}
+.tti-route .model-tag{color:var(--accent);font-weight:600}
+.tti-route .decision-tag{color:var(--accent2)}
+.tti-route .blocked-tag{color:var(--red);font-weight:700}
+.tti-signals{font-family:var(--mono);font-size:11px;color:var(--text2);margin-top:2px}
+.tti-config{font-family:var(--mono);font-size:11px;color:var(--green);margin-top:2px}
+.session-stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-bottom:8px}
+.ss-stat{font-family:var(--mono);font-size:12px;line-height:1.6;color:var(--text2)}
+.ss-stat .ss-val{color:var(--text);font-weight:600}
+.adaptive-item{padding:6px 0;border-bottom:1px solid var(--border);font-family:var(--mono);font-size:11px;color:var(--text2)}
+.adaptive-item:last-child{border-bottom:none}
+.adaptive-item .ai-type{font-weight:600}
+.adaptive-item.latency .ai-type{color:var(--orange)}
+.adaptive-item.error .ai-type{color:var(--red)}
+.adaptive-item.status .ai-type{color:var(--accent)}
+.session-empty{display:flex;align-items:center;justify-content:center;height:100%;color:var(--text2);font-size:14px}
+
+/* ------------------------------------------------------------------ */
 /* Modal                                                               */
 /* ------------------------------------------------------------------ */
 .modal-overlay{
@@ -333,6 +375,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   <div class="nav-tab" data-tab="flow" onclick="switchTab('flow')">Pipeline Flow</div>
   <div class="nav-tab" data-tab="models" onclick="switchTab('models')">Models</div>
   <div class="nav-tab" data-tab="stats" onclick="switchTab('stats')">Stats</div>
+  <div class="nav-tab" data-tab="sessions" onclick="switchTab('sessions')">Sessions</div>
 </div>
 
 <!-- ======================== ALERT BANNER ======================== -->
@@ -493,6 +536,23 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   </div>
 </div>
 
+<!-- ======================== TAB 5: SESSIONS ======================== -->
+<div class="tab-content" id="tab-sessions">
+  <div class="sessions-layout">
+    <div class="session-sidebar">
+      <div class="panel-header">
+        <span>Active Sessions</span>
+        <span id="session-count" style="font-family:var(--mono);color:var(--accent)">0</span>
+      </div>
+      <div id="session-list"></div>
+    </div>
+    <div class="session-main" id="session-main">
+      <div class="session-empty" id="session-empty">Select a session to view its trace timeline</div>
+      <div id="session-detail" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ======================== EDIT BUDGET MODAL ======================== -->
 <div class="modal-overlay" id="editBudgetModal">
   <div class="modal">
@@ -591,6 +651,8 @@ let selectedTraceId = null;
 let ws = null;
 let startTime = Date.now();
 let previousModelStatuses = {};  // track status changes for alerts
+let sessions = [];
+let selectedSessionId = null;
 
 const MODEL_COLORS = {
   'gpt-4o': '#38bdf8',
@@ -629,6 +691,7 @@ function switchTab(tabId) {
   if (tabId === 'flow') renderFlowTraces();
   if (tabId === 'models') { fetchModelStats(); renderModels(); }
   if (tabId === 'stats') { renderStats(); fetchConfig(); }
+  if (tabId === 'sessions') { renderSessionList(); }
 }
 
 /* ================================================================== */
@@ -662,12 +725,20 @@ function connectWS() {
       if (msg.model_stats) {
         updateModelStats(msg.model_stats);
       }
+      // Update sessions if present
+      if (msg.sessions) {
+        sessions = msg.sessions;
+        renderSessionList();
+        if (selectedSessionId) renderSessionDetail(selectedSessionId);
+      }
       if (msg.type === 'init') {
         traces = msg.traces || [];
+        if (msg.sessions) sessions = msg.sessions;
         renderTraceList();
         renderFlowTraces();
         renderStats();
         updateModelFilter();
+        renderSessionList();
       } else if (msg.type === 'new_trace' && msg.trace) {
         traces.unshift(msg.trace);
         if (traces.length > 200) traces.length = 200;
@@ -1530,6 +1601,190 @@ async function reloadConfigFromFile() {
       alert('Failed: ' + (e.detail || JSON.stringify(e)));
     }
   } catch(e) { alert('Failed: ' + e); }
+}
+
+/* ================================================================== */
+/*  TAB 5: SESSIONS                                                   */
+/* ================================================================== */
+function renderSessionList() {
+  const container = $('#session-list');
+  if (!container) return;
+  const countEl = $('#session-count');
+  if (countEl) countEl.textContent = sessions.length;
+  if (sessions.length === 0) {
+    container.innerHTML = '<div style="padding:20px;color:var(--text2);font-size:13px;text-align:center">No sessions yet. Send requests with X-Session-ID header.</div>';
+    return;
+  }
+  container.innerHTML = sessions.map(s => {
+    const sel = s.session_id === selectedSessionId ? ' selected' : '';
+    const dotClass = s.status === 'active' ? 'active' : 'idle';
+    const shortId = s.session_id.length > 16 ? s.session_id.substring(0, 16) + '...' : s.session_id;
+    const user = s.user_id || 'anon';
+    return `<div class="session-item${sel}" onclick="selectSession('${escHtml(s.session_id)}')">
+      <div style="display:flex;align-items:center;gap:6px">
+        <span class="s-dot ${dotClass}"></span>
+        <span class="s-id">${escHtml(shortId)}</span>
+      </div>
+      <div class="s-meta">
+        <span>${escHtml(user)}</span>
+        <span>${s.query_count} ${s.query_count === 1 ? 'query' : 'queries'}</span>
+        <span>$${(s.total_cost || 0).toFixed(4)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function selectSession(sessionId) {
+  selectedSessionId = sessionId;
+  renderSessionList();
+  await renderSessionDetail(sessionId);
+}
+
+async function renderSessionDetail(sessionId) {
+  const detailEl = $('#session-detail');
+  const emptyEl = $('#session-empty');
+  if (!detailEl || !emptyEl) return;
+
+  const session = sessions.find(s => s.session_id === sessionId);
+  if (!session) {
+    emptyEl.style.display = 'flex';
+    detailEl.style.display = 'none';
+    return;
+  }
+
+  emptyEl.style.display = 'none';
+  detailEl.style.display = 'block';
+
+  // Fetch traces for this session
+  let sessionTraces = [];
+  try {
+    const r = await fetch(`${API_BASE}/v1/sessions/${encodeURIComponent(sessionId)}/traces`);
+    if (r.ok) sessionTraces = await r.json();
+  } catch(e) { console.warn('fetch session traces failed', e); }
+
+  // Fetch adaptive updates
+  let adaptiveUpdates = [];
+  try {
+    const r = await fetch(`${API_BASE}/v1/sessions/${encodeURIComponent(sessionId)}/adaptive`);
+    if (r.ok) adaptiveUpdates = await r.json();
+  } catch(e) {}
+
+  const user = session.user_id || 'anon';
+  const createdAgo = timeAgo(session.created_at);
+
+  // Header
+  let html = `<div class="session-header">
+    <h2>Session: ${escHtml(sessionId.substring(0, 20))}${sessionId.length > 20 ? '...' : ''}</h2>
+    <div class="sh-meta">
+      <span>User: <strong style="color:var(--accent)">${escHtml(user)}</strong></span>
+      <span>Started: ${createdAgo}</span>
+      <span>Queries: <strong>${session.query_count}</strong></span>
+      <span>Cost: <strong style="color:var(--green)">$${(session.total_cost || 0).toFixed(4)}</strong></span>
+    </div>
+  </div>`;
+
+  // Trace timeline
+  html += `<div class="session-section"><h3>Trace Timeline</h3>`;
+  if (sessionTraces.length === 0) {
+    html += '<div style="color:var(--text2);font-size:13px">No traces yet</div>';
+  } else {
+    html += sessionTraces.map(t => {
+      const ts = t.timestamp ? new Date(t.timestamp).toLocaleTimeString() : '';
+      const d = t.decision || {};
+      const blocked = d.blocked;
+      const sigs = t.signals || [];
+
+      // Build signals summary
+      const sigParts = [];
+      for (const s of sigs) {
+        if (!s.skipped) {
+          if (s.name === 'domain') sigParts.push('domain=' + (s.metadata?.domain || 'general'));
+          else if (s.name === 'complexity') sigParts.push('complexity=' + s.score.toFixed(2));
+          else if (s.name === 'safety' && s.score > 0.3) sigParts.push('safety=' + s.score.toFixed(2));
+          else if (s.name === 'tool' && s.metadata?.needed) sigParts.push('tool=needed');
+          else if (s.name === 'pii' && s.metadata?.total_matches > 0) sigParts.push('pii=' + s.metadata.total_matches);
+        }
+      }
+
+      let routeHtml = '';
+      if (blocked) {
+        const safetySig = sigs.find(s => s.name === 'safety');
+        const safetyScore = safetySig ? safetySig.score.toFixed(2) : '?';
+        routeHtml = `<span class="blocked-tag">BLOCKED</span> safety=${safetyScore}`;
+      } else {
+        const latMs = (t.total_latency_ms || 0).toFixed(1);
+        const decName = d.decision_name || '';
+        const sim = d.similarity ? d.similarity.toFixed(2) : '';
+        routeHtml = `<span class="model-tag">${escHtml(d.selected_model || '')}</span> (${latMs}ms)`;
+        if (decName) routeHtml += ` <span class="decision-tag">${escHtml(decName)}</span>`;
+        if (sim) routeHtml += ` (sim: ${sim})`;
+      }
+
+      // Config line
+      let configHtml = '';
+      if (!blocked && d.inference_config) {
+        const cfgParts = Object.entries(d.inference_config)
+          .filter(([k,v]) => v !== null && v !== undefined)
+          .map(([k,v]) => `${k}=${v}`);
+        if (cfgParts.length > 0) configHtml = `<div class="tti-config">Config: ${cfgParts.join(', ')}</div>`;
+      }
+
+      return `<div class="trace-timeline-item">
+        <span class="tti-time">${ts}</span>
+        <span class="tti-query">"${escHtml(t.query || '')}"</span>
+        <div class="tti-route">${routeHtml}</div>
+        ${sigParts.length > 0 ? `<div class="tti-signals">Signals: ${sigParts.join(' ')}</div>` : ''}
+        ${configHtml}
+      </div>`;
+    }).join('');
+  }
+  html += '</div>';
+
+  // Session stats
+  html += `<div class="session-section"><h3>Session Stats</h3>`;
+  const mc = session.model_counts || {};
+  const modelParts = Object.entries(mc).map(([m, c]) => `${escHtml(m)} (${c})`).join(', ');
+  const dc = session.decision_counts || {};
+  const decParts = Object.entries(dc).map(([d, c]) => `${escHtml(d)}(${c})`).join(' ');
+
+  html += `<div class="session-stats-grid">
+    <div class="ss-stat">Models used: <span class="ss-val">${modelParts || 'none'}</span></div>
+    <div class="ss-stat">Avg routing: <span class="ss-val">${session.avg_routing_ms || 0}ms</span></div>
+    <div class="ss-stat">Avg model: <span class="ss-val">${session.avg_model_ms || 0}ms</span></div>
+    <div class="ss-stat">Total cost: <span class="ss-val" style="color:var(--green)">$${(session.total_cost || 0).toFixed(4)}</span></div>
+    <div class="ss-stat">Saved: <span class="ss-val" style="color:var(--accent)">${session.savings_pct || 0}% vs all-claude</span></div>
+    <div class="ss-stat">Decisions: <span class="ss-val">${decParts || 'none'}</span></div>
+    <div class="ss-stat">Guardrails: <span class="ss-val">${session.blocked_count || 0} blocked, ${session.pii_count || 0} PII</span></div>
+  </div></div>`;
+
+  // Adaptive updates
+  html += `<div class="session-section"><h3>Adaptive Updates (this session)</h3>`;
+  if (adaptiveUpdates.length === 0) {
+    html += '<div style="color:var(--text2);font-size:12px;font-family:var(--mono)">No adaptive changes detected during this session</div>';
+  } else {
+    html += adaptiveUpdates.map(u => {
+      const typeClass = u.type === 'latency_change' ? 'latency' : u.type === 'error_rate_change' ? 'error' : 'status';
+      return `<div class="adaptive-item ${typeClass}">
+        <span class="ai-type">${escHtml(u.model)}</span> ${escHtml(u.message)}
+      </div>`;
+    }).join('');
+  }
+  html += '</div>';
+
+  detailEl.innerHTML = html;
+}
+
+function timeAgo(isoStr) {
+  if (!isoStr) return '';
+  const d = new Date(isoStr);
+  const now = new Date();
+  const diffMs = now - d;
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 60) return diffSec + 's ago';
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return diffMin + ' min ago';
+  const diffHr = Math.floor(diffMin / 60);
+  return diffHr + ' hr ago';
 }
 
 /* ================================================================== */

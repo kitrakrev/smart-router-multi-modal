@@ -70,10 +70,14 @@ class ChatRequest(BaseModel):
     max_tokens: Optional[int] = None
     tools: Optional[list[dict]] = None
     stream: bool = False
+    session_id: Optional[str] = None  # optional session tracking
+    user_id: Optional[str] = None     # optional user tracking
 
 class EvalRequest(BaseModel):
     messages: list[ChatMessage]
     tools: Optional[list[dict]] = None
+    session_id: Optional[str] = None
+    user_id: Optional[str] = None
 
 class ChatChoice(BaseModel):
     index: int = 0
@@ -100,9 +104,13 @@ class ChatResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 @app.post("/v1/chat/completions")
-async def chat_completions(req: ChatRequest):
+async def chat_completions(req: ChatRequest, request: Request):
     t_start = time.perf_counter()
     trace_id = trace_store.new_trace_id()
+
+    # Extract session/user from headers or body
+    session_id = req.session_id or request.headers.get("X-Session-ID", "") or str(uuid.uuid4())
+    user_id = req.user_id or request.headers.get("X-User-ID", "")
 
     messages_raw = [m.model_dump() for m in req.messages]
     tools_raw = req.tools
@@ -123,6 +131,8 @@ async def chat_completions(req: ChatRequest):
             signals=signals,
             decision=decision,
             total_latency_ms=t_total,
+            session_id=session_id,
+            user_id=user_id,
         )
         return JSONResponse(status_code=400, content={
             "error": {
@@ -156,6 +166,8 @@ async def chat_completions(req: ChatRequest):
         decision=decision,
         total_latency_ms=t_total,
         model_response_latency_ms=model_latency,
+        session_id=session_id,
+        user_id=user_id,
     )
 
     # Build OpenAI-compatible response
@@ -183,9 +195,13 @@ async def chat_completions(req: ChatRequest):
 # ---------------------------------------------------------------------------
 
 @app.post("/v1/eval")
-async def eval_query(req: EvalRequest):
+async def eval_query(req: EvalRequest, request: Request):
     t_start = time.perf_counter()
     trace_id = trace_store.new_trace_id()
+
+    # Extract session/user from headers or body
+    session_id = req.session_id or request.headers.get("X-Session-ID", "") or str(uuid.uuid4())
+    user_id = req.user_id or request.headers.get("X-User-ID", "")
 
     messages_raw = [m.model_dump() for m in req.messages]
     tools_raw = req.tools
@@ -206,6 +222,8 @@ async def eval_query(req: EvalRequest):
         signals=signals,
         decision=decision,
         total_latency_ms=t_total,
+        session_id=session_id,
+        user_id=user_id,
     )
 
     # Build detailed response
@@ -279,7 +297,7 @@ async def ws_traces(ws: WebSocket):
     # Send recent traces as initial payload
     try:
         recent = trace_store.get_recent(20)
-        await ws.send_text(json.dumps({"type": "init", "traces": recent, "stats": trace_store.get_stats(), "model_stats": model_registry.get_stats_snapshot()}))
+        await ws.send_text(json.dumps({"type": "init", "traces": recent, "stats": trace_store.get_stats(), "model_stats": model_registry.get_stats_snapshot(), "sessions": trace_store.get_all_sessions()}))
         # Keep alive
         while True:
             try:
@@ -303,7 +321,7 @@ async def ws_traces(ws: WebSocket):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
-    html_path = Path(__file__).parent / "dashboard.html"
+    html_path = Path(__file__).parent / "index.html"
     return HTMLResponse(content=html_path.read_text(), status_code=200)
 
 
@@ -345,6 +363,46 @@ async def execute_tool(req: ToolExecRequest):
 @app.get("/v1/tools")
 async def list_tools():
     return {"tools": ToolExecutor.get_definitions()}
+
+
+# ---------------------------------------------------------------------------
+# Session & User APIs
+# ---------------------------------------------------------------------------
+
+@app.get("/v1/sessions")
+async def list_sessions():
+    """GET /v1/sessions -- list all sessions with query counts."""
+    return trace_store.get_all_sessions()
+
+
+@app.get("/v1/sessions/{session_id}/traces")
+async def get_session_traces(session_id: str):
+    """GET /v1/sessions/{id}/traces -- all traces for a session (ordered)."""
+    session = trace_store.sessions.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return trace_store.get_traces_for_session(session_id)
+
+
+@app.get("/v1/sessions/{session_id}/adaptive")
+async def get_session_adaptive(session_id: str):
+    """GET /v1/sessions/{id}/adaptive -- adaptive updates during session."""
+    session = trace_store.sessions.get_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return trace_store.get_session_adaptive_updates(session_id)
+
+
+@app.get("/v1/users/{user_id}/traces")
+async def get_user_traces(user_id: str):
+    """GET /v1/users/{id}/traces -- all traces for a user."""
+    return trace_store.get_traces_for_user(user_id)
+
+
+@app.get("/v1/users/{user_id}/stats")
+async def get_user_stats(user_id: str):
+    """GET /v1/users/{id}/stats -- user-level routing stats."""
+    return trace_store.get_user_stats(user_id)
 
 
 # ---------------------------------------------------------------------------

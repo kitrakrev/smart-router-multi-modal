@@ -274,6 +274,7 @@ class TraceStore:
         message = {"type": "new_trace", "trace": trace.to_dict()}
         if self._registry and hasattr(self._registry, 'get_stats_snapshot'):
             message["model_stats"] = self._registry.get_stats_snapshot()
+        message["sessions"] = self.get_all_sessions()
         payload = json.dumps(message)
         dead: list[WebSocket] = []
         for ws in self.subscribers:
@@ -305,6 +306,96 @@ class TraceStore:
     def get_recent(self, n: int = 50) -> list[dict]:
         items = list(self.traces)[-n:]
         return [t.to_dict() for t in reversed(items)]
+
+    def get_traces_for_session(self, session_id: str) -> list[dict]:
+        return [t.to_dict() for t in self.traces if t.session_id == session_id]
+
+    def get_traces_for_user(self, user_id: str) -> list[dict]:
+        return [t.to_dict() for t in self.traces if t.user_id == user_id]
+
+    def get_user_stats(self, user_id: str) -> dict:
+        user_traces = [t for t in self.traces if t.user_id == user_id]
+        if not user_traces:
+            return {"user_id": user_id, "total_requests": 0}
+        total = len(user_traces)
+        model_dist: dict[str, int] = {}
+        decision_dist: dict[str, int] = {}
+        blocked = 0
+        total_cost = 0.0
+        total_lat = 0.0
+        for t in user_traces:
+            d = t.decision
+            if d.get("blocked"):
+                blocked += 1
+            else:
+                m = d.get("selected_model", "unknown")
+                model_dist[m] = model_dist.get(m, 0) + 1
+                dn = d.get("decision_name", "")
+                if dn:
+                    decision_dist[dn] = decision_dist.get(dn, 0) + 1
+                total_cost += d.get("estimated_cost", 0)
+            total_lat += t.total_latency_ms
+        sessions = self.sessions.get_sessions_for_user(user_id)
+        return {
+            "user_id": user_id,
+            "total_requests": total,
+            "total_sessions": len(sessions),
+            "blocked_count": blocked,
+            "total_cost": round(total_cost, 6),
+            "avg_latency_ms": round(total_lat / total, 2),
+            "model_distribution": model_dist,
+            "decision_distribution": decision_dist,
+        }
+
+    def get_all_sessions(self) -> list[dict]:
+        all_traces = list(self.traces)
+        sessions = self.sessions.get_all()
+        return [s.to_dict(all_traces) for s in sessions]
+
+    def get_session_adaptive_updates(self, session_id: str) -> list[dict]:
+        """Compare model stats at session start vs current stats."""
+        session = self.sessions.get_session(session_id)
+        if not session or not self._registry:
+            return []
+        start_snap = session.model_stats_snapshot_start
+        current_snap = self._registry.get_stats_snapshot()
+        updates = []
+        for model_name, current in current_snap.items():
+            start = start_snap.get(model_name, {})
+            # Latency EMA change
+            start_ema = start.get("latency_ema", 0)
+            cur_ema = current.get("latency_ema", 0)
+            if start_ema > 0 and abs(cur_ema - start_ema) > 20:
+                updates.append({
+                    "type": "latency_change",
+                    "model": model_name,
+                    "message": f"{model_name} latency EMA: {start_ema:.0f}ms -> {cur_ema:.0f}ms",
+                    "old_value": round(start_ema, 1),
+                    "new_value": round(cur_ema, 1),
+                })
+            # Error rate change
+            start_err = start.get("error_rate", 0)
+            cur_err = current.get("error_rate", 0)
+            if abs(cur_err - start_err) > 0.01:
+                updates.append({
+                    "type": "error_rate_change",
+                    "model": model_name,
+                    "message": f"{model_name} error_rate: {start_err:.1%} -> {cur_err:.1%}",
+                    "old_value": round(start_err, 4),
+                    "new_value": round(cur_err, 4),
+                })
+            # Status change
+            start_status = start.get("status", "unknown")
+            cur_status = current.get("status", "unknown")
+            if start_status != cur_status and start_status != "unknown":
+                updates.append({
+                    "type": "status_change",
+                    "model": model_name,
+                    "message": f"{model_name} status: {start_status} -> {cur_status}",
+                    "old_value": start_status,
+                    "new_value": cur_status,
+                })
+        return updates
 
     def get_stats(self) -> dict:
         if not self.traces:

@@ -23,6 +23,54 @@ models:
     capabilities: [text, general]
     quality_score: 0.70
 
+  - name: claude-opus
+    provider: anthropic
+    cost_per_1k_input: 15.00
+    cost_per_1k_output: 75.00
+    avg_latency_ms: 2000
+    capabilities: [text, reasoning, code, tools, vision]
+    quality_score: 0.98
+
+  - name: claude-haiku
+    provider: anthropic
+    cost_per_1k_input: 0.25
+    cost_per_1k_output: 1.25
+    avg_latency_ms: 400
+    capabilities: [text, code, tools]
+    quality_score: 0.72
+
+  - name: gemini-2.0-flash
+    provider: google
+    cost_per_1k_input: 0.10
+    cost_per_1k_output: 0.40
+    avg_latency_ms: 200
+    capabilities: [text, vision, code, general, fast]
+    quality_score: 0.75
+
+  - name: gemini-2.5-pro
+    provider: google
+    cost_per_1k_input: 1.25
+    cost_per_1k_output: 10.00
+    avg_latency_ms: 1200
+    capabilities: [text, vision, reasoning, code, tools]
+    quality_score: 0.93
+
+  - name: llama-3.1-70b
+    provider: local
+    cost_per_1k_input: 0.50
+    cost_per_1k_output: 0.50
+    avg_latency_ms: 500
+    capabilities: [text, reasoning, code]
+    quality_score: 0.82
+
+  - name: llama-3.1-8b
+    provider: local
+    cost_per_1k_input: 0.03
+    cost_per_1k_output: 0.06
+    avg_latency_ms: 100
+    capabilities: [text, general, fast]
+    quality_score: 0.60
+
   - name: qwen-3b-local
     provider: local
     cost_per_1k_input: 0.001

@@ -559,11 +559,20 @@ class Router:
 
                 model_name, _ = self._select_model_by_strategy(required, strategy)
                 if model_name is None:
-                    # Fallback: relax to just text capability
-                    model_name, _ = self._select_model_by_strategy(["text"], "cheapest_capable")
-                if model_name is None:
-                    cheapest = min(self.models.values(), key=lambda m: m.cost_per_1k_output)
-                    model_name = cheapest.name
+                    # No model has exact capabilities — DON'T relax to text-only
+                    # Instead pick cheapest model that has ANY of the required capabilities
+                    req_set = set(required)
+                    partial = [(m, len(set(m.capabilities) & req_set)) for m in self.models.values()]
+                    partial = [(m, overlap) for m, overlap in partial if overlap > 0]
+                    if partial:
+                        # Pick cheapest among models with most capability overlap
+                        max_overlap = max(o for _, o in partial)
+                        best = [m for m, o in partial if o == max_overlap]
+                        model_name = min(best, key=lambda m: m.cost_per_1k_output).name
+                    else:
+                        # Absolute fallback — no overlap at all
+                        cheapest = min(self.models.values(), key=lambda m: m.cost_per_1k_output)
+                        model_name = cheapest.name
 
                 inference_config = dict(decision_config.get("config", {}))
                     inference_config.pop("enable_reasoning", None)

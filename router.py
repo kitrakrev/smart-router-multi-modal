@@ -547,11 +547,31 @@ class Router:
             if decision_config:
                 required = decision_config.get("require", ["text"])
                 strategy = decision_config.get("strategy", self.budget.strategy)
+
+                # Complexity-aware strategy override:
+                # Low complexity → always cheapest, regardless of decision strategy
+                # High complexity → keep decision's strategy (may be quality_first)
+                complexity_sig = sig_map.get("complexity")
+                complexity_score = complexity_sig.score if complexity_sig else 0.5
+                if complexity_score < 0.3:
+                    strategy = "cheapest_capable"
+                    required = ["text"]  # simple query, any text model works
+                elif complexity_score < 0.5 and strategy == "quality_first":
+                    strategy = "balanced"  # moderate → don't overspend
+
                 model_name, _ = self._select_model_by_strategy(required, strategy)
                 if model_name is None:
-                    model_name = self.default_rule.get("model", "gpt-4o-mini")
+                    # Pick absolute cheapest as last resort
+                    cheapest = min(self.models.values(), key=lambda m: m.cost_per_1k_output)
+                    model_name = cheapest.name
 
-                inference_config = decision_config.get("config", {})
+                inference_config = dict(decision_config.get("config", {}))
+                # Adjust config based on complexity
+                if complexity_score < 0.3:
+                    inference_config["temperature"] = min(inference_config.get("temperature", 0.3), 0.3)
+                    inference_config["max_tokens"] = min(inference_config.get("max_tokens", 512), 512)
+                    inference_config.pop("enable_reasoning", None)
+                    inference_config.pop("thinking_tokens", None)
 
                 return RouterDecision(
                     selected_model=model_name,

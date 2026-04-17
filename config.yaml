@@ -184,7 +184,7 @@ routing:
         max_tokens: 1024
 
     - name: simple_qa
-      description: "Simple factual questions, trivia, basic lookup"
+      description: "Simple factual questions, trivia, basic lookup, arithmetic"
       exemplars:
         - "what is the capital of France"
         - "who invented the telephone"
@@ -193,6 +193,17 @@ routing:
         - "define photosynthesis"
         - "what is the boiling point of water"
         - "who wrote Romeo and Juliet"
+        - "what is 2 plus 2"
+        - "what is 10 times 5"
+        - "how tall is Mount Everest"
+        - "what color is the sky"
+        - "name the continents"
+        - "who is the president of the United States"
+        - "what is the speed of light"
+        - "how many days in a year"
+        - "what is the largest ocean"
+        - "when was the internet invented"
+        - "what does DNA stand for"
       require: [text]
       strategy: cheapest_capable
       config:

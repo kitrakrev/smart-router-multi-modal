@@ -947,7 +947,13 @@ function renderTracePipeline(t) {
   }
   html += '<span class="pipe-arrow">&rarr;</span>';
   if (t.decision?.blocked) html += '<span class="pipe-node pipe-blocked">BLOCKED</span>';
-  else html += `<span class="pipe-node pipe-model">${escHtml(t.decision?.selected_model||'')}</span>`;
+  else {
+    const dn = t.decision?.decision_name || '';
+    const sm = t.decision?.similarity ? t.decision.similarity.toFixed(2) : '';
+    html += `<span class="pipe-node" style="background:rgba(139,92,246,.15);color:var(--accent2);font-weight:600">${escHtml(dn)} ${sm}</span>`;
+    html += '<span class="pipe-arrow">&rarr;</span>';
+    html += `<span class="pipe-node pipe-model">${escHtml(t.decision?.selected_model||'')}</span>`;
+  }
   html += '</div>';
   return html;
 }
@@ -981,9 +987,23 @@ function renderSignals(t) {
 
 function renderDecision(t) {
   const d = t.decision || {};
+  const sim = d.similarity || 0;
+  const simColor = sim > 0.5 ? 'var(--green)' : sim > 0.3 ? 'var(--yellow)' : 'var(--red)';
+  const simPct = Math.min(sim * 200, 100);
   return `<div class="detail-section"><h3>Routing Decision</h3>
     <div class="decision-box">
       <div class="model-name">${d.blocked ? 'BLOCKED' : escHtml(d.selected_model||'')}</div>
+      ${d.decision_name ? `<div style="margin:8px 0">
+        <span style="color:var(--text2)">decision: </span>
+        <span style="background:rgba(139,92,246,.2);color:var(--accent2);padding:3px 10px;border-radius:4px;font-weight:600;font-size:14px">${escHtml(d.decision_name)}</span>
+      </div>` : ''}
+      ${sim > 0 ? `<div style="margin:6px 0">
+        <span style="color:var(--text2)">similarity: </span>
+        <span style="color:${simColor};font-weight:700;font-size:14px">${sim.toFixed(3)}</span>
+        <div style="background:var(--bg);border-radius:4px;height:8px;margin-top:4px;overflow:hidden;max-width:300px">
+          <div style="background:linear-gradient(90deg,var(--accent),var(--accent2));width:${simPct}%;height:100%;border-radius:4px;transition:width 0.3s"></div>
+        </div>
+      </div>` : ''}
       <div class="reason">"${escHtml(d.reason||'')}"</div>
       ${!d.blocked ? `
         <div class="config-line">config: ${JSON.stringify(d.inference_config)}</div>

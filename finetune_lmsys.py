@@ -962,7 +962,9 @@ def main():
     # ------------------------------------------------------------------
     print(f"\n[3/6] Encoding with {ENCODER_NAME}...")
     encoder = SentenceTransformer(ENCODER_NAME, device=str(device))
-    emb_dim = encoder.get_sentence_embedding_dimension()
+    emb_dim = (encoder.get_embedding_dimension()
+               if hasattr(encoder, 'get_embedding_dimension')
+               else encoder.get_sentence_embedding_dimension())
     print(f"  Embedding dim: {emb_dim}")
     embeddings = encode_texts(encoder, prompts)
 

@@ -586,9 +586,11 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 const API_BASE = window.location.origin;
 let traces = [];
 let models = [];
+let modelStats = {};  // live runtime stats from server
 let selectedTraceId = null;
 let ws = null;
 let startTime = Date.now();
+let previousModelStatuses = {};  // track status changes for alerts
 
 const MODEL_COLORS = {
   'gpt-4o': '#38bdf8',
@@ -625,7 +627,7 @@ function switchTab(tabId) {
   $$('.tab-content').forEach(t => t.classList.toggle('active', t.id === 'tab-' + tabId));
   // Refresh content when switching
   if (tabId === 'flow') renderFlowTraces();
-  if (tabId === 'models') renderModels();
+  if (tabId === 'models') { fetchModelStats(); renderModels(); }
   if (tabId === 'stats') { renderStats(); fetchConfig(); }
 }
 
@@ -656,6 +658,10 @@ function connectWS() {
   ws.onmessage = (e) => {
     try {
       const msg = JSON.parse(e.data);
+      // Update model stats if present
+      if (msg.model_stats) {
+        updateModelStats(msg.model_stats);
+      }
       if (msg.type === 'init') {
         traces = msg.traces || [];
         renderTraceList();
@@ -893,10 +899,18 @@ function buildNodeData(trace) {
     latency: 0,
   };
 
+  // Model select node: show live status color from runtime stats
+  let modelSelectColor = blocked ? 'red' : 'green';
+  const selectedModelStats = modelStats[d.selected_model];
+  if (!blocked && selectedModelStats) {
+    if (selectedModelStats.status === 'degraded') modelSelectColor = 'yellow';
+    else if (selectedModelStats.status === 'disabled') modelSelectColor = 'red';
+  }
+  const modelStatusLine = !blocked && selectedModelStats ? ` [${selectedModelStats.status}]` : '';
   nodes.model_select = {
-    color: blocked ? 'red' : 'green',
-    lines:[blocked ? '-' : d.selected_model || '-'],
-    detail:{model: d.selected_model, estimated_cost: d.estimated_cost, estimated_latency: d.estimated_latency_ms},
+    color: modelSelectColor,
+    lines:[blocked ? '-' : (d.selected_model || '-') + modelStatusLine],
+    detail:{model: d.selected_model, estimated_cost: d.estimated_cost, estimated_latency: d.estimated_latency_ms, runtime_status: selectedModelStats ? selectedModelStats.status : 'unknown'},
     latency: 0,
   };
 
@@ -1019,13 +1033,36 @@ function renderModels() {
   }
   list.innerHTML = models.map(m => {
     const health = m._health;
-    const hClass = health===true?'ok':health===false?'fail':'unknown';
-    const disClass = m.enabled?'':'mc-disabled';
-    return `<div class="model-card ${disClass}">
+    const stats = modelStats[m.name] || {};
+    const runtimeStatus = stats.status || 'unknown';
+    const hClass = runtimeStatus === 'healthy' ? 'ok' : runtimeStatus === 'degraded' ? 'ok' : runtimeStatus === 'disabled' ? 'fail' : (health===true?'ok':health===false?'fail':'unknown');
+    const disClass = m.enabled ? '' : 'mc-disabled';
+    const statusClass = runtimeStatus === 'healthy' ? 'status-healthy' : runtimeStatus === 'degraded' ? 'status-degraded' : runtimeStatus === 'disabled' ? 'status-disabled' : '';
+    const statusDot = runtimeStatus === 'healthy' ? '#22c55e' : runtimeStatus === 'degraded' ? '#f59e0b' : runtimeStatus === 'disabled' ? '#ef4444' : '#484f58';
+    const statusLabel = runtimeStatus.toUpperCase();
+
+    // Build sparkline from latency history (last 20)
+    const latHist = (stats.latency_history || []).slice(-20);
+    const maxLat = Math.max(...latHist, 1);
+    const sparkBars = latHist.map(v => {
+      const h = Math.max(Math.round((v / maxLat) * 22), 1);
+      const color = v > 3000 ? 'var(--red)' : v > 1000 ? 'var(--orange)' : 'var(--accent)';
+      return `<div class="bar" style="height:${h}px;background:${color}"></div>`;
+    }).join('');
+
+    // Domain accuracy chips
+    const domainAcc = stats.accuracy_by_domain || {};
+    const domainChips = Object.entries(domainAcc).map(([d, acc]) => {
+      const pct = Math.round(acc * 100);
+      const color = pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--orange)' : 'var(--red)';
+      return `<span class="domain-chip" style="color:${color}">${d}: ${pct}%</span>`;
+    }).join('');
+
+    return `<div class="model-card ${disClass} ${statusClass}">
       <div class="mc-row">
-        <span class="mc-health ${hClass}"></span>
+        <span class="mc-health ${hClass}" style="background:${statusDot};box-shadow:0 0 6px ${statusDot}"></span>
         <span class="mc-name">${escHtml(m.name)}</span>
-        <span style="margin-left:auto;font-size:12px;color:var(--text2)">${escHtml(m.provider||'')}</span>
+        <span style="margin-left:auto;font-size:11px;font-weight:600;color:${statusDot}">${statusLabel}</span>
       </div>
       <div class="mc-caps">${(m.capabilities||[]).map(c=>`<span class="mc-cap">${c}</span>`).join('')}</div>
       <div class="mc-stats">
@@ -1033,13 +1070,96 @@ function renderModels() {
         <span>~${Math.round(m.avg_latency_ms||0)}ms</span>
         <span>${m.enabled?'enabled':'disabled'}</span>
       </div>
+      ${stats.total_requests > 0 || runtimeStatus !== 'unknown' ? `
+      <div class="mc-live-stats">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:1px;color:var(--accent);margin-bottom:6px;font-weight:600">Live Stats</div>
+        <div class="stat-row"><span class="stat-label">Requests:</span><span class="stat-val">${(stats.total_requests||0).toLocaleString()}</span><span class="stat-label" style="margin-left:12px">Errors:</span><span class="stat-val" style="color:${(stats.error_rate||0)>0.1?'var(--red)':'var(--text)'}">${((stats.error_rate||0)*100).toFixed(1)}%</span></div>
+        <div class="stat-row"><span class="stat-label">Latency EMA:</span><span class="stat-val">${Math.round(stats.latency_ema||0)}ms</span></div>
+        <div class="stat-row"><span class="stat-label">P50:</span><span class="stat-val">${Math.round(stats.latency_p50||0)}ms</span><span class="stat-label" style="margin-left:12px">P95:</span><span class="stat-val">${Math.round(stats.latency_p95||0)}ms</span></div>
+        ${latHist.length > 0 ? `<div style="margin-top:6px"><span class="stat-label">Latency Trend:</span><div class="mc-sparkline">${sparkBars}</div></div>` : ''}
+        ${domainChips ? `<div style="margin-top:6px"><span class="stat-label">Accuracy by Domain:</span><div class="mc-domain-acc">${domainChips}</div></div>` : ''}
+        ${stats.disabled_reason ? `<div style="margin-top:6px;color:var(--red);font-size:10px">${escHtml(stats.disabled_reason)}</div>` : ''}
+      </div>` : ''}
       <div class="mc-actions">
         <button onclick="toggleModel('${escHtml(m.name)}')">${m.enabled?'Disable':'Enable'}</button>
         <button onclick="checkModelHealth('${escHtml(m.name)}')">Health</button>
         <button class="danger" onclick="deleteModel('${escHtml(m.name)}')">Remove</button>
       </div>
+      <div class="mc-simulate">
+        <span style="font-size:10px;color:var(--text2)">Simulate:</span>
+        <button class="sim-latency" onclick="simulateModel('${escHtml(m.name)}','high_latency')">High Latency</button>
+        <button class="sim-errors" onclick="simulateModel('${escHtml(m.name)}','errors')">Errors</button>
+        <button class="sim-recovery" onclick="simulateModel('${escHtml(m.name)}','recovery')">Recovery</button>
+      </div>
     </div>`;
   }).join('');
+}
+
+/* Model stats update handler */
+function updateModelStats(newStats) {
+  // Check for status changes and show alerts
+  for (const [name, stats] of Object.entries(newStats)) {
+    const prevStatus = previousModelStatuses[name];
+    const newStatus = stats.status;
+    if (prevStatus && prevStatus !== newStatus) {
+      if (newStatus === 'disabled') {
+        showAlert('error', `${name} disabled: ${stats.disabled_reason || 'threshold exceeded'}`);
+      } else if (newStatus === 'degraded') {
+        showAlert('warn', `${name} degraded: latency EMA ${Math.round(stats.latency_ema)}ms rising`);
+      } else if (newStatus === 'healthy' && (prevStatus === 'disabled' || prevStatus === 'degraded')) {
+        showAlert('success', `${name} recovered and is now healthy`);
+      }
+    }
+    previousModelStatuses[name] = newStatus;
+  }
+  modelStats = newStats;
+  // Re-render models tab if visible
+  const modelsTab = document.querySelector('.nav-tab[data-tab="models"]');
+  if (modelsTab && modelsTab.classList.contains('active')) {
+    renderModels();
+  }
+}
+
+/* Alert banner */
+function showAlert(type, message) {
+  const banner = $('#alertBanner');
+  const icon = $('#alertIcon');
+  const text = $('#alertText');
+  banner.className = 'alert-banner visible ' + type;
+  icon.textContent = type === 'error' ? '\u26D4' : type === 'warn' ? '\u26A0' : '\u2705';
+  text.textContent = message;
+  // Auto-hide after 8 seconds
+  clearTimeout(banner._timeout);
+  banner._timeout = setTimeout(() => hideAlert(), 8000);
+}
+function hideAlert() {
+  $('#alertBanner').classList.remove('visible');
+}
+
+/* Simulate model degradation */
+async function simulateModel(modelName, scenario) {
+  try {
+    const r = await fetch(`${API_BASE}/v1/stats/simulate`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({model: modelName, scenario: scenario}),
+    });
+    const j = await r.json();
+    if (!r.ok) { alert(j.detail || 'Failed'); return; }
+    // Fetch fresh stats
+    await fetchModelStats();
+    await fetchModels();
+  } catch(e) { alert('Simulate failed: ' + e); }
+}
+
+async function fetchModelStats() {
+  try {
+    const r = await fetch(`${API_BASE}/v1/stats/models`);
+    if (r.ok) {
+      const stats = await r.json();
+      updateModelStats(stats);
+    }
+  } catch(e) { console.warn('fetchModelStats failed', e); }
 }
 
 async function fetchModels() {
@@ -1418,6 +1538,7 @@ async function reloadConfigFromFile() {
 document.addEventListener('DOMContentLoaded', () => {
   connectWS();
   fetchModels();
+  fetchModelStats();
   fetchConfig();
 
   // Also fetch traces via REST in case WS init doesn't have them

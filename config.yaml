@@ -56,7 +56,7 @@ routing:
         enable_reasoning: true
         thinking_tokens: 1000
         max_tokens: 4096
-      min_similarity: 0.4
+      min_similarity: 0.25
 
     - name: code_generation
       description: "Writing, debugging, or explaining code"

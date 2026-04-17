@@ -1,0 +1,28 @@
+[project]
+name = "llm-router"
+version = "1.0.0"
+description = "Intelligent LLM query router with vision, tools, and real-time traces"
+requires-python = ">=3.10"
+dependencies = [
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pyyaml>=6.0",
+    "langdetect>=1.0.9",
+    "httpx>=0.25.0",
+    "websockets>=12.0",
+    "pydantic>=2.0",
+]
+
+[project.optional-dependencies]
+embeddings = [
+    "sentence-transformers>=2.2.0",
+    "numpy>=1.24.0",
+]
+benchmark = [
+    "tqdm>=4.65.0",
+]
+
+[dependency-groups]
+dev = [
+    "tqdm>=4.65.0",
+]

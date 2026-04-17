@@ -1,0 +1,178 @@
+models:
+  - name: gpt-4o
+    provider: openai
+    cost_per_1k_input: 2.50
+    cost_per_1k_output: 10.00
+    avg_latency_ms: 800
+    capabilities: [vision, tools, reasoning, text]
+    quality_score: 0.92
+
+  - name: claude-sonnet
+    provider: anthropic
+    cost_per_1k_input: 3.00
+    cost_per_1k_output: 15.00
+    avg_latency_ms: 600
+    capabilities: [tools, reasoning, code, text]
+    quality_score: 0.95
+
+  - name: gpt-4o-mini
+    provider: openai
+    cost_per_1k_input: 0.15
+    cost_per_1k_output: 0.60
+    avg_latency_ms: 300
+    capabilities: [text, general]
+    quality_score: 0.70
+
+  - name: qwen-3b-local
+    provider: local
+    cost_per_1k_input: 0.001
+    cost_per_1k_output: 0.003
+    avg_latency_ms: 50
+    capabilities: [text, general, fast]
+    quality_score: 0.45
+
+routing:
+  budget:
+    max_cost_per_query: 0.01
+    strategy: cheapest_capable
+    quality_threshold: 0.7
+
+  decisions:
+    - name: complex_reasoning
+      description: "Complex mathematical proofs, logical deductions, multi-step analysis"
+      exemplars:
+        - "prove that the square root of 2 is irrational"
+        - "derive the quadratic formula from first principles"
+        - "solve this system of differential equations"
+        - "find the eigenvalues and eigenvectors of matrix A"
+        - "prove by induction that the sum of first n integers equals n(n+1)/2"
+        - "analyze the time complexity of this algorithm"
+        - "what is the limit of this sequence as n approaches infinity"
+        - "find the general solution to this recurrence relation"
+      require: [reasoning]
+      strategy: quality_first
+      config:
+        temperature: 0
+        enable_reasoning: true
+        thinking_tokens: 1000
+        max_tokens: 4096
+      min_similarity: 0.4
+
+    - name: code_generation
+      description: "Writing, debugging, or explaining code"
+      exemplars:
+        - "write a Python function to sort a list"
+        - "debug this JavaScript code"
+        - "implement a binary search tree in Java"
+        - "write a SQL query to find duplicate records"
+        - "create a REST API endpoint in FastAPI"
+        - "explain what this regex does"
+        - "refactor this function to be more efficient"
+        - "write unit tests for this class"
+      require: [code]
+      strategy: cheapest_capable
+      config:
+        temperature: 0.2
+        max_tokens: 2048
+
+    - name: creative_writing
+      description: "Stories, poems, creative content, brainstorming"
+      exemplars:
+        - "write a short story about a time traveler"
+        - "compose a haiku about autumn"
+        - "brainstorm 10 startup ideas for AI"
+        - "write a compelling product description"
+        - "create a dialogue between two historical figures"
+        - "write a poem about the ocean"
+        - "come up with a creative name for my app"
+      require: [text]
+      strategy: cheapest_capable
+      config:
+        temperature: 0.9
+        max_tokens: 2048
+
+    - name: vision_task
+      description: "Image understanding, chart reading, visual QA"
+      exemplars:
+        - "what is shown in this image"
+        - "describe the chart and extract the data"
+        - "read the text in this screenshot"
+        - "analyze this diagram"
+        - "what breed is this dog in the photo"
+        - "compare these two images"
+      require: [vision]
+      strategy: cheapest_capable
+      config:
+        temperature: 0.3
+        max_tokens: 1024
+
+    - name: tool_usage
+      description: "Tasks requiring tool calling or function execution"
+      exemplars:
+        - "search the web for latest news about AI"
+        - "calculate 15% tip on $47.50"
+        - "look up the weather in San Francisco"
+        - "block IP address 192.168.1.1 on the firewall"
+        - "run a vulnerability scan on this server"
+        - "execute a port scan on the target"
+      require: [tools]
+      strategy: cheapest_capable
+      config:
+        temperature: 0.2
+        max_tokens: 1024
+
+    - name: translation
+      description: "Language translation tasks"
+      exemplars:
+        - "translate this to French"
+        - "what does this German text mean in English"
+        - "convert this Chinese text to English"
+        - "translate the following paragraph to Spanish"
+        - "how do you say hello in Japanese"
+      require: [text]
+      strategy: cheapest_capable
+      config:
+        temperature: 0.3
+        max_tokens: 1024
+
+    - name: simple_qa
+      description: "Simple factual questions, trivia, basic lookup"
+      exemplars:
+        - "what is the capital of France"
+        - "who invented the telephone"
+        - "how many planets are in the solar system"
+        - "what year did World War 2 end"
+        - "define photosynthesis"
+        - "what is the boiling point of water"
+        - "who wrote Romeo and Juliet"
+      require: [text]
+      strategy: cheapest_capable
+      config:
+        temperature: 0.1
+        max_tokens: 200
+
+    - name: general
+      description: "General conversation and queries"
+      exemplars:
+        - "tell me about yourself"
+        - "what can you help me with"
+        - "summarize this article"
+        - "rewrite this email to be more professional"
+        - "explain this concept in simple terms"
+        - "give me advice on time management"
+      require: [text]
+      strategy: cheapest_capable
+      config:
+        temperature: 0.7
+        max_tokens: 1024
+
+  # Safety rules use keyword matching (not embedding) — must be fast
+  safety_rules:
+    - name: jailbreak_block
+      if: "safety > 0.7"
+      action: block
+      reason: "Jailbreak attempt detected"
+    - name: pii_warning
+      if: "pii > 0.5"
+      action: warn
+      reason: "PII detected in query"

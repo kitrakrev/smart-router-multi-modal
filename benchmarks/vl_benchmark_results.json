@@ -1,0 +1,257 @@
+{
+  "benchmark": "VL-RouterBench",
+  "total_samples": 30764,
+  "test_samples": 6154,
+  "num_models": 17,
+  "num_datasets": 14,
+  "model_sample_pairs": 522988,
+  "cost_bounds": {
+    "cmin": 1.5149999853747431e-05,
+    "cmax": 0.006967499852180481
+  },
+  "elapsed_seconds": 7.11,
+  "blocked_by_safety": 0,
+  "latency": {
+    "vl_aware_avg_ms": 0.002,
+    "vl_aware_p50_ms": 0.002,
+    "vl_aware_p99_ms": 0.003,
+    "signal_pipeline_avg_ms": 1.142
+  },
+  "leaderboard": [
+    {
+      "strategy": "Our Router (VL-aware)",
+      "accuracy": 0.8383,
+      "rank_score": 0.8001,
+      "avg_cost": 0.00023999999393709004,
+      "optimal_rate": 0.0726,
+      "cost_ratio_vs_gpt4o": 0.06030000001192093,
+      "total_cost": 1.4767999649047852
+    },
+    {
+      "strategy": "Our Router (signal pipeline)",
+      "accuracy": 0.8383,
+      "rank_score": 0.8001,
+      "avg_cost": 0.00023999999393709004,
+      "optimal_rate": 0.0726,
+      "cost_ratio_vs_gpt4o": 0.06030000001192093,
+      "total_cost": 1.4767999649047852
+    },
+    {
+      "strategy": "Oracle (cheapest correct)",
+      "accuracy": 1.0,
+      "rank_score": 0.9617,
+      "avg_cost": 9.7999996796716e-05,
+      "optimal_rate": 1.0,
+      "cost_ratio_vs_gpt4o": 0.02459999918937683,
+      "total_cost": 0.6029999852180481
+    },
+    {
+      "strategy": "Always GPT-4o",
+      "accuracy": 0.844,
+      "rank_score": 0.4822,
+      "avg_cost": 0.003982999827712774,
+      "optimal_rate": 0.0,
+      "cost_ratio_vs_gpt4o": 1.0,
+      "total_cost": 24.510900497436523
+    },
+    {
+      "strategy": "Always Gemini-Flash",
+      "accuracy": 0.8383,
+      "rank_score": 0.8001,
+      "avg_cost": 0.00023999999393709004,
+      "optimal_rate": 0.0726,
+      "cost_ratio_vs_gpt4o": 0.06030000001192093,
+      "total_cost": 1.4767999649047852
+    },
+    {
+      "strategy": "Always Cheapest",
+      "accuracy": 0.2944,
+      "rank_score": 0.3124,
+      "avg_cost": 5.199999941396527e-05,
+      "optimal_rate": 0.2673,
+      "cost_ratio_vs_gpt4o": 0.013100000098347664,
+      "total_cost": 0.3212999999523163
+    },
+    {
+      "strategy": "Random",
+      "accuracy": 0.586,
+      "rank_score": 0.5527,
+      "avg_cost": 0.0008030000026337802,
+      "optimal_rate": 0.0539,
+      "cost_ratio_vs_gpt4o": 0.20149999856948853,
+      "total_cost": 4.939599990844727
+    }
+  ],
+  "per_dataset": [
+    {
+      "dataset": "AI2D",
+      "family": "science",
+      "accuracy": 0.8541,
+      "rank_score": 0.8128,
+      "avg_cost": 0.00024199999461416155,
+      "optimal_rate": 0.0829,
+      "samples": 603,
+      "signal_pipeline_acc": 0.8541
+    },
+    {
+      "dataset": "ChartQA",
+      "family": "ocr",
+      "accuracy": 0.8682,
+      "rank_score": 0.8249,
+      "avg_cost": 0.0002390000008745119,
+      "optimal_rate": 0.062,
+      "samples": 516,
+      "signal_pipeline_acc": 0.8682
+    },
+    {
+      "dataset": "DocVQA",
+      "family": "ocr",
+      "accuracy": 0.8382,
+      "rank_score": 0.8001,
+      "avg_cost": 0.00023799999326001853,
+      "optimal_rate": 0.0821,
+      "samples": 414,
+      "signal_pipeline_acc": 0.8382
+    },
+    {
+      "dataset": "HallusionBench",
+      "family": "general",
+      "accuracy": 0.7887,
+      "rank_score": 0.7583,
+      "avg_cost": 0.00024399999529123306,
+      "optimal_rate": 0.061,
+      "samples": 213,
+      "signal_pipeline_acc": 0.7887
+    },
+    {
+      "dataset": "InfoVQA",
+      "family": "general",
+      "accuracy": 0.8275,
+      "rank_score": 0.7912,
+      "avg_cost": 0.0002390000008745119,
+      "optimal_rate": 0.0538,
+      "samples": 539,
+      "signal_pipeline_acc": 0.8275
+    },
+    {
+      "dataset": "MMBench",
+      "family": "general",
+      "accuracy": 0.8894,
+      "rank_score": 0.8422,
+      "avg_cost": 0.0002390000008745119,
+      "optimal_rate": 0.0657,
+      "samples": 624,
+      "signal_pipeline_acc": 0.8894
+    },
+    {
+      "dataset": "MMMU",
+      "family": "general",
+      "accuracy": 0.847,
+      "rank_score": 0.807,
+      "avg_cost": 0.00024199999461416155,
+      "optimal_rate": 0.0731,
+      "samples": 438,
+      "signal_pipeline_acc": 0.847
+    },
+    {
+      "dataset": "MMStar",
+      "family": "general",
+      "accuracy": 0.8163,
+      "rank_score": 0.7807,
+      "avg_cost": 0.00024900000425986946,
+      "optimal_rate": 0.0653,
+      "samples": 245,
+      "signal_pipeline_acc": 0.8163
+    },
+    {
+      "dataset": "MathVerse",
+      "family": "math",
+      "accuracy": 0.8133,
+      "rank_score": 0.7792,
+      "avg_cost": 0.0002410000015515834,
+      "optimal_rate": 0.0712,
+      "samples": 632,
+      "signal_pipeline_acc": 0.8133
+    },
+    {
+      "dataset": "MathVision",
+      "family": "math",
+      "accuracy": 0.8253,
+      "rank_score": 0.7901,
+      "avg_cost": 0.00023400000645779073,
+      "optimal_rate": 0.1065,
+      "samples": 601,
+      "signal_pipeline_acc": 0.8253
+    },
+    {
+      "dataset": "MathVista",
+      "family": "math",
+      "accuracy": 0.8145,
+      "rank_score": 0.7808,
+      "avg_cost": 0.00023600000713486224,
+      "optimal_rate": 0.0826,
+      "samples": 593,
+      "signal_pipeline_acc": 0.8145
+    },
+    {
+      "dataset": "OCRBench",
+      "family": "ocr",
+      "accuracy": 0.7711,
+      "rank_score": 0.7434,
+      "avg_cost": 0.00024399999529123306,
+      "optimal_rate": 0.0796,
+      "samples": 201,
+      "signal_pipeline_acc": 0.7711
+    },
+    {
+      "dataset": "RealWorldQA",
+      "family": "general",
+      "accuracy": 0.8758,
+      "rank_score": 0.8292,
+      "avg_cost": 0.0002519999979995191,
+      "optimal_rate": 0.0435,
+      "samples": 161,
+      "signal_pipeline_acc": 0.8758
+    },
+    {
+      "dataset": "TextVQA",
+      "family": "ocr",
+      "accuracy": 0.8556,
+      "rank_score": 0.8141,
+      "avg_cost": 0.00024199999461416155,
+      "optimal_rate": 0.0508,
+      "samples": 374,
+      "signal_pipeline_acc": 0.8556
+    }
+  ],
+  "per_family": {
+    "general": {
+      "accuracy": 0.8473,
+      "avg_cost": 0.00024199999461416155,
+      "samples": 2220
+    },
+    "math": {
+      "accuracy": 0.8176,
+      "avg_cost": 0.00023700000019744039,
+      "samples": 1826
+    },
+    "science": {
+      "accuracy": 0.8541,
+      "avg_cost": 0.00024199999461416155,
+      "samples": 603
+    },
+    "ocr": {
+      "accuracy": 0.8439,
+      "avg_cost": 0.00023999999393709004,
+      "samples": 1505
+    }
+  },
+  "model_distribution": {
+    "vl_aware": {
+      "Gemini-Flash-2.5": 6154
+    },
+    "signal_pipeline": {
+      "gpt-4o-mini": 6154
+    }
+  }
+}

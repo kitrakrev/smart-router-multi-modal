@@ -116,6 +116,19 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
 .test-examples button{padding:4px 10px;background:var(--bg3);color:var(--text2);border:1px solid var(--border);border-radius:4px;font-size:11px;cursor:pointer}
 .test-examples button:hover{border-color:var(--accent);color:var(--accent)}
 
+/* Image upload */
+.image-upload-area{border:2px dashed var(--border);border-radius:8px;padding:12px;text-align:center;cursor:pointer;transition:border-color .2s,background .2s;margin-top:10px;display:flex;align-items:center;justify-content:center;gap:12px;color:var(--text2);font-size:13px}
+.image-upload-area:hover{border-color:var(--accent);color:var(--accent)}
+.image-upload-area.drag-over{border-color:var(--accent);background:rgba(59,130,246,.05);color:var(--accent)}
+.image-upload-area .upload-icon{font-size:18px}
+.image-preview-row{display:flex;align-items:center;gap:10px;margin-top:10px;padding:8px 12px;background:var(--bg3);border:1px solid var(--border);border-radius:8px}
+.image-preview-row img{width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid var(--border)}
+.image-preview-row .image-info{flex:1;font-size:12px;font-family:var(--mono);color:var(--text2)}
+.image-preview-row .image-info .image-name{color:var(--text);font-weight:600;display:block;margin-bottom:2px}
+.image-preview-row .remove-image{background:none;border:1px solid var(--border);color:var(--red);border-radius:4px;padding:4px 8px;font-size:11px;cursor:pointer;margin-top:0}
+.image-preview-row .remove-image:hover{background:rgba(239,68,68,.1);border-color:var(--red)}
+.image-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:4px;font-size:11px;background:rgba(56,189,248,.15);color:var(--accent);font-family:var(--mono);margin-left:8px}
+
 /* ------------------------------------------------------------------ */
 /* TAB 2: Pipeline Flow                                                */
 /* ------------------------------------------------------------------ */
@@ -395,7 +408,23 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
       </div>
       <div class="test-panel">
         <textarea id="test-input" placeholder="Type a query to test routing... (e.g., 'Solve the integral of x^2 dx')"></textarea>
-        <button id="test-btn" onclick="sendTestQuery()">Evaluate Query</button>
+        <input type="file" id="image-file-input" accept="image/*" style="display:none" onchange="handleImageUpload(event)">
+        <div id="drop-zone" class="image-upload-area" onclick="document.getElementById('image-file-input').click()">
+          <span class="upload-icon">&#x1F4CE;</span>
+          <span>Upload Image or drag &amp; drop here</span>
+        </div>
+        <div id="image-preview-row" class="image-preview-row" style="display:none">
+          <img id="image-preview-thumb" src="" alt="preview">
+          <div class="image-info">
+            <span class="image-name" id="image-preview-name"></span>
+            <span id="image-preview-size"></span>
+          </div>
+          <button class="remove-image" onclick="removeImage()">&#x2715; remove</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;margin-top:8px">
+          <button id="test-btn" onclick="sendTestQuery()">Evaluate Query</button>
+          <span id="image-badge" class="image-badge" style="display:none">&#x1F4CE; Image attached</span>
+        </div>
         <div class="test-examples">
           <button onclick="setExample('Solve the integral of x^3 dx from 0 to 1')">Math</button>
           <button onclick="setExample('Write a Python function to implement quicksort')">Code</button>
@@ -405,6 +434,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
           <button onclick="setExample('Scan ports on 192.168.1.1 and check for vulnerabilities')">Security Tool</button>
           <button onclick="setExample('My email is test@example.com and SSN is 123-45-6789')">PII</button>
           <button onclick="setExample('Explain the mechanism of Bayesian optimization with gradient descent and backpropagation in distributed stochastic systems')">Complex</button>
+          <button onclick="setVisionExample()" style="border-color:var(--accent2);color:var(--accent2)">&#x1F441; Vision</button>
         </div>
       </div>
       <div id="trace-list"></div>
@@ -755,9 +785,85 @@ function connectWS() {
 }
 
 /* ================================================================== */
-/*  TEST QUERY                                                        */
+/*  TEST QUERY + IMAGE UPLOAD                                         */
 /* ================================================================== */
+let attachedImage = null;   // data:image/...;base64,... or null
+let attachedImageName = '';
+let attachedImageSize = 0;
+
 function setExample(text) { $('#test-input').value = text; }
+
+function handleImageUpload(event) {
+  const file = event.target.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    attachedImage = e.target.result;
+    attachedImageName = file.name;
+    attachedImageSize = file.size;
+    showImagePreview();
+  };
+  reader.readAsDataURL(file);
+}
+
+function showImagePreview() {
+  $('#image-preview-thumb').src = attachedImage;
+  $('#image-preview-name').textContent = attachedImageName;
+  const kb = (attachedImageSize / 1024).toFixed(1);
+  $('#image-preview-size').textContent = kb + ' KB';
+  $('#image-preview-row').style.display = 'flex';
+  $('#image-badge').style.display = 'inline-flex';
+  $('#drop-zone').style.display = 'none';
+}
+
+function hideImagePreview() {
+  $('#image-preview-row').style.display = 'none';
+  $('#image-badge').style.display = 'none';
+  $('#drop-zone').style.display = 'flex';
+  $('#image-file-input').value = '';
+}
+
+function removeImage() {
+  attachedImage = null;
+  attachedImageName = '';
+  attachedImageSize = 0;
+  hideImagePreview();
+}
+
+/* Tiny 1x1 red PNG for the Vision demo button */
+const DEMO_IMAGE_BASE64 = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==';
+
+function setVisionExample() {
+  $('#test-input').value = 'Describe what you see in this image';
+  attachedImage = DEMO_IMAGE_BASE64;
+  attachedImageName = 'demo-pixel.png';
+  attachedImageSize = 68;
+  showImagePreview();
+}
+
+/* Drag and drop */
+(function initDropZone() {
+  document.addEventListener('DOMContentLoaded', () => {
+    const dz = document.getElementById('drop-zone');
+    if (!dz) return;
+    dz.addEventListener('dragover', (e) => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dz.classList.remove('drag-over');
+      const file = e.dataTransfer.files[0];
+      if (!file || !file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        attachedImage = ev.target.result;
+        attachedImageName = file.name;
+        attachedImageSize = file.size;
+        showImagePreview();
+      };
+      reader.readAsDataURL(file);
+    });
+  });
+})();
 
 async function sendTestQuery() {
   const input = $('#test-input').value.trim();
@@ -765,15 +871,28 @@ async function sendTestQuery() {
   const btn = $('#test-btn');
   btn.disabled = true;
   btn.textContent = 'Evaluating...';
+
+  // Build message content — multimodal if image attached
+  let content;
+  if (attachedImage) {
+    content = [
+      {type: 'text', text: input},
+      {type: 'image_url', image_url: {url: attachedImage}}
+    ];
+  } else {
+    content = input;
+  }
+
   try {
     await fetch('/v1/eval', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({messages: [{role: 'user', content: input}]}),
+      body: JSON.stringify({messages: [{role: 'user', content: content}]}),
     });
   } catch (err) { console.error(err); }
   btn.disabled = false;
   btn.textContent = 'Evaluate Query';
+  removeImage();  // clear after send
 }
 
 /* ================================================================== */
@@ -940,13 +1059,20 @@ function buildNodeData(trace) {
     latency: (safety ? safety.execution_time_ms : 0) + (pii ? pii.execution_time_ms : 0),
   };
 
+  const vision = signalByName(sigs,'vision');
   const sigTotalMs = sigs.reduce((a,s)=>a + (s.execution_time_ms||0), 0);
+  const visionLine = vision
+    ? (vision.skipped
+      ? 'vision: none'
+      : `vision: detected=${vision.metadata.detected}, type=${vision.metadata.content_type||'image'}${vision.metadata.image_type ? ', '+vision.metadata.image_type : ''}${vision.metadata.image_size_kb ? ', '+vision.metadata.image_size_kb+'KB' : ''}`)
+    : 'vision: -';
   nodes.signals = {
     color:'green',
     lines:[
       domain ? `domain: ${domain.metadata.domain || '-'} ${fmt(domain.score)}` : 'domain: -',
       complexity ? `complexity: ${fmt(complexity.score)}` : 'complexity: -',
       tool ? `tool: ${fmt(tool.score)}` : 'tool: -',
+      visionLine,
     ],
     detail: Object.fromEntries(sigs.map(s=>[s.name, `score=${fmt(s.score)} conf=${fmt(s.confidence)} ${fmtMs(s.execution_time_ms)}`])),
     latency: sigTotalMs,

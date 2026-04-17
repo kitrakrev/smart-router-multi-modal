@@ -67,6 +67,33 @@ def _has_image(messages: list[dict]) -> bool:
     return False
 
 
+def _extract_image_metadata(messages: list[dict]) -> dict:
+    """Extract image type and approximate size from the first image_url block."""
+    import base64 as _b64
+    for m in messages:
+        content = m.get("content", "")
+        if isinstance(content, list):
+            for block in content:
+                if isinstance(block, dict) and block.get("type") == "image_url":
+                    url = block.get("image_url", {}).get("url", "")
+                    image_type = "unknown"
+                    size_kb = 0
+                    if url.startswith("data:"):
+                        # data:image/png;base64,AAAA...
+                        header, _, data = url.partition(",")
+                        mime = header.split(";")[0].replace("data:", "")
+                        image_type = mime  # e.g. image/png
+                        try:
+                            raw = _b64.b64decode(data)
+                            size_kb = round(len(raw) / 1024, 1)
+                        except Exception:
+                            size_kb = round(len(data) * 3 / 4 / 1024, 1)
+                    elif url.startswith("http"):
+                        image_type = "url"
+                    return {"image_type": image_type, "image_size_kb": size_kb}
+    return {}
+
+
 # ---------------------------------------------------------------------------
 # 1. KeywordSignal
 # ---------------------------------------------------------------------------
@@ -329,10 +356,13 @@ async def vision_signal(messages: list[dict], **_kw) -> SignalResult:
     elif any(w in text for w in ["code", "terminal", "console", "output"]):
         content_type = "code_screenshot"
 
+    # Extract image metadata (type, size)
+    img_meta = _extract_image_metadata(messages)
+
     return SignalResult(
         name="vision", score=1.0, confidence=0.7,
         execution_time_ms=0,
-        metadata={"detected": True, "content_type": content_type},
+        metadata={"detected": True, "content_type": content_type, **img_meta},
     )
 
 

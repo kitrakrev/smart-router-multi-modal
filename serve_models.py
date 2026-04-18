@@ -75,26 +75,32 @@ class ChatCompletionResponse(BaseModel):
 
 # --- Model loading ---
 
-def load_medalpaca():
-    """Load medalpaca-7b model."""
-    model_id = "medalpaca/medalpaca-7b"
+def load_llava_med():
+    """Load LLaVA-Med-7B — medical vision specialist (pathology + radiology)."""
+    from transformers import AutoProcessor, LlavaForConditionalGeneration
+    model_id = "microsoft/llava-med-v1.5-mistral-7b"
     print(f"[INFO] Loading {model_id}...")
     start = time.time()
 
-    tokenizer = LlamaTokenizer.from_pretrained(model_id)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        dtype=torch.float16,
-        device_map="auto",
-        trust_remote_code=True,
-    )
+    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+    try:
+        model = LlavaForConditionalGeneration.from_pretrained(
+            model_id,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+    except Exception:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
     model.eval()
 
     elapsed = time.time() - start
-    print(f"[INFO] medalpaca-7b loaded in {elapsed:.1f}s")
+    print(f"[INFO] llava-med-7b loaded in {elapsed:.1f}s")
 
     if torch.cuda.is_available():
         mem_used = torch.cuda.memory_allocated(0) / 1e9
@@ -103,9 +109,10 @@ def load_medalpaca():
 
     return {
         "model": model,
-        "tokenizer": tokenizer,
+        "tokenizer": processor,
+        "processor": processor,
         "model_id": model_id,
-        "type": "text",
+        "type": "multimodal",
     }
 
 
@@ -309,9 +316,9 @@ async def health():
 
 # Model name aliases -> internal key
 MODEL_ALIASES = {
-    "medalpaca-7b": "medalpaca",
-    "medalpaca": "medalpaca",
-    "medalpaca/medalpaca-7b": "medalpaca",
+    "llava-med-7b": "llava-med",
+    "llava-med": "llava-med",
+    "microsoft/llava-med-v1.5-mistral-7b": "llava-med",
     "medgemma-4b": "medgemma",
     "medgemma": "medgemma",
     "google/medgemma-4b-it": "medgemma",
@@ -374,12 +381,12 @@ async def startup():
         print(f"VRAM: {vram:.1f} GB")
     print("=" * 60)
 
-    # Load medalpaca-7b (primary medical model, ~14GB FP16)
+    # Load LLaVA-Med-7B (pathology + radiology specialist, ~14GB FP16)
     try:
-        MODELS["medalpaca"] = load_medalpaca()
-        print("[OK] medalpaca-7b ready!")
+        MODELS["llava-med"] = load_llava_med()
+        print("[OK] llava-med-7b ready!")
     except Exception as e:
-        print(f"[ERROR] Failed to load medalpaca: {e}")
+        print(f"[ERROR] Failed to load llava-med: {e}")
         import traceback
         traceback.print_exc()
 

@@ -55,25 +55,25 @@ overrides:
     params: {temperature: 0.1, max_tokens: 1024}
 
   # MedAlpaca-7B: text-only medical — detailed reasoning prompts
-  "medalpaca-7b::pathology":
+  "llava-med-7b::pathology":
     system_prompt: |
       You are a pathologist specializing in histopathology. Analyze tissue descriptions.
       Provide differential diagnosis with WHO classification. Discuss cellular features,
-      nuclear atypia, mitotic activity, and architectural patterns. Text-based analysis only.
+      nuclear atypia, mitotic activity, and architectural patterns. Analyze both images and clinical descriptions.
     params: {temperature: 0.1, max_tokens: 2048}
 
-  "medalpaca-7b::radiology":
+  "llava-med-7b::radiology":
     system_prompt: |
       You are a radiologist interpreting imaging reports. Structure as:
       Clinical history → Findings → Impression → Recommendations.
-      Discuss differential diagnosis for each finding. Text-based analysis only.
+      Discuss differential diagnosis for each finding. Analyze both images and clinical descriptions.
     params: {temperature: 0.1, max_tokens: 2048}
 
-  "medalpaca-7b::dermatology":
+  "llava-med-7b::dermatology":
     system_prompt: |
       You are a dermatologist evaluating skin conditions from clinical descriptions.
       Apply ABCDE criteria when relevant. Provide ranked differential diagnosis
-      with management plan and referral criteria. Text-based analysis only.
+      with management plan and referral criteria. Analyze both images and clinical descriptions.
     params: {temperature: 0.1, max_tokens: 2048}
 
   # LLaVA-1.6-7B: general vision+text — lean prompts

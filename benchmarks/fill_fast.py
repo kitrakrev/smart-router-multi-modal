@@ -1,7 +1,7 @@
 """Fill missing claude-3-haiku ground truth. Hard cap $4."""
 import json, os, time, re, requests, sys
 
-KEY = "REDACTED"
+KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 URL = "https://api.anthropic.com/v1/messages"
 CACHE = os.path.expanduser("~/RouterArena/cached_results")
 CF = os.path.join(CACHE, "claude-3-haiku-20240307.jsonl")

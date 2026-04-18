@@ -3,7 +3,7 @@
   "passed": 42,
   "failed": 1,
   "pass_rate": 0.9767,
-  "avg_latency_ms": 361.27,
+  "avg_latency_ms": 331.09,
   "scenarios": [
     {
       "name": "med_diabetes_symptoms",
@@ -11,7 +11,7 @@
       "specialty": "medical.general_medicine",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 6849.81,
+      "latency_ms": 6177.65,
       "checks": {
         "blocked": {
           "passed": true,
@@ -33,7 +33,7 @@
       "specialty": "medical.cardiology",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 34.82,
+      "latency_ms": 41.34,
       "checks": {
         "blocked": {
           "passed": true,
@@ -55,7 +55,7 @@
       "specialty": "medical.pharmacology",
       "model": "gpt-4o",
       "blocked": false,
-      "latency_ms": 29.98,
+      "latency_ms": 42.67,
       "checks": {
         "blocked": {
           "passed": true,
@@ -77,7 +77,7 @@
       "specialty": "medical.general_medicine",
       "model": "gpt-4o",
       "blocked": false,
-      "latency_ms": 30.75,
+      "latency_ms": 43.81,
       "checks": {
         "blocked": {
           "passed": true,
@@ -99,7 +99,7 @@
       "specialty": "medical.pathology",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 61.0,
+      "latency_ms": 164.06,
       "checks": {
         "blocked": {
           "passed": true,
@@ -121,7 +121,7 @@
       "specialty": "medical.radiology",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 46.91,
+      "latency_ms": 42.88,
       "checks": {
         "blocked": {
           "passed": true,
@@ -143,7 +143,7 @@
       "specialty": "medical.dermatology",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 42.03,
+      "latency_ms": 48.63,
       "checks": {
         "blocked": {
           "passed": true,
@@ -165,7 +165,7 @@
       "specialty": "medical.ophthalmology",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 46.15,
+      "latency_ms": 45.14,
       "checks": {
         "blocked": {
           "passed": true,
@@ -187,7 +187,7 @@
       "specialty": "medical.pharmacology",
       "model": "gpt-4o",
       "blocked": false,
-      "latency_ms": 40.28,
+      "latency_ms": 36.73,
       "checks": {
         "blocked": {
           "passed": true,
@@ -209,7 +209,7 @@
       "specialty": "medical.general_medicine",
       "model": "gpt-4o",
       "blocked": false,
-      "latency_ms": 30.36,
+      "latency_ms": 22.3,
       "checks": {
         "blocked": {
           "passed": true,
@@ -231,7 +231,7 @@
       "specialty": "",
       "model": "",
       "blocked": true,
-      "latency_ms": 30.8,
+      "latency_ms": 27.2,
       "checks": {
         "blocked": {
           "passed": true,
@@ -253,7 +253,7 @@
       "specialty": "medical.pathology",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 39.1,
+      "latency_ms": 28.61,
       "checks": {
         "blocked": {
           "passed": true,
@@ -275,7 +275,7 @@
       "specialty": "general.reasoning",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 40.6,
+      "latency_ms": 23.48,
       "checks": {
         "blocked": {
           "passed": true,
@@ -297,7 +297,7 @@
       "specialty": "general.code",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 22.98,
+      "latency_ms": 18.96,
       "checks": {
         "blocked": {
           "passed": true,
@@ -319,7 +319,7 @@
       "specialty": "general.simple_qa",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 26.7,
+      "latency_ms": 29.98,
       "checks": {
         "blocked": {
           "passed": true,
@@ -341,7 +341,7 @@
       "specialty": "general.creative",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 25.35,
+      "latency_ms": 19.72,
       "checks": {
         "blocked": {
           "passed": true,
@@ -363,7 +363,7 @@
       "specialty": "medical.emergency",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 27.72,
+      "latency_ms": 27.51,
       "checks": {
         "blocked": {
           "passed": true,
@@ -385,7 +385,7 @@
       "specialty": "medical.radiology",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 46.47,
+      "latency_ms": 28.03,
       "checks": {
         "blocked": {
           "passed": true,
@@ -407,7 +407,7 @@
       "specialty": "medical.pathology",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 43.91,
+      "latency_ms": 36.53,
       "checks": {
         "blocked": {
           "passed": true,
@@ -429,7 +429,7 @@
       "specialty": "medical.emergency",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 45.53,
+      "latency_ms": 19.12,
       "checks": {
         "blocked": {
           "passed": true,
@@ -451,7 +451,7 @@
       "specialty": "medical.emergency",
       "model": "medgemma-4b",
       "blocked": false,
-      "latency_ms": 25.41,
+      "latency_ms": 28.47,
       "checks": {
         "blocked": {
           "passed": true,
@@ -490,9 +490,9 @@
       "detail": "model=gpt-4o"
     },
     {
-      "name": "cheapest_is_free",
+      "name": "cheapest_picks_lowest_cost",
       "passed": true,
-      "detail": "cost=$0.0"
+      "detail": "model=llama-3.1-8b cost=$0.1230"
     },
     {
       "name": "hard_more_complex_than_easy",
@@ -577,7 +577,7 @@
     {
       "name": "routing_latency_ok",
       "passed": true,
-      "detail": "32.0ms"
+      "detail": "20.2ms"
     }
   ]
 }

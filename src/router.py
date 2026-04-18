@@ -158,21 +158,49 @@ class MedVisionRouter:
         specialty = await self._resolve_specialty(signals)
         decision.specialty = specialty
 
-        # ── Step 3b: Ambiguity detection ─────────────────────────────────
-        # If text similarity is very low, the query is ambiguous
+        # ── Step 3b: Ambiguity detection + LLM fallback ──────────────────
         ambiguity_threshold = 0.35
         if signals.text.similarity < ambiguity_threshold:
+            # Embedding uncertain — call fallback LLM classifier
+            fallback_domain = None
+            fallback_info = {}
+            try:
+                from src.fallback_classifier import FallbackClassifier
+                classifier = await FallbackClassifier.get_instance()
+                query_text = self._extract_query_preview(messages, max_len=500)
+                result = await classifier.classify(query_text)
+                fallback_domain = result.domain
+                fallback_info = {
+                    "llm_domain": result.domain,
+                    "llm_confidence": result.confidence,
+                    "llm_model": result.model_used,
+                    "llm_latency_ms": result.latency_ms,
+                }
+                # Use LLM's classification as the specialty
+                if result.confidence > 0.5:
+                    if result.domain in ("code", "reasoning", "creative", "simple_qa"):
+                        specialty = f"general.{result.domain}"
+                    else:
+                        specialty = f"medical.{result.domain}"
+                    decision.specialty = specialty
+                    logger.info(
+                        "Ambiguous query resolved by LLM: %s (conf=%.2f, %sms)",
+                        result.domain, result.confidence, result.latency_ms,
+                    )
+            except Exception as e:
+                logger.warning("Fallback classifier failed: %s", e)
+
             decision.signals["ambiguity"] = {
                 "is_ambiguous": True,
                 "confidence": round(signals.text.similarity, 4),
-                "reason": f"Low specialty match ({signals.text.similarity:.3f} < {ambiguity_threshold})",
-                "fallback": "Routing to highest-quality generalist model",
+                "reason": f"Low embedding match ({signals.text.similarity:.3f} < {ambiguity_threshold})",
+                "fallback": "LLM classifier" if fallback_domain else "quality_first default",
+                **fallback_info,
             }
-            # For ambiguous queries, prefer quality over cost
+            # Upgrade strategy for ambiguous queries
             if strategy not in ("critical", "quality_first"):
                 strategy = "quality_first"
                 decision.budget_strategy = "quality_first"
-                logger.info("Ambiguous query (sim=%.3f) — upgraded to quality_first", signals.text.similarity)
         else:
             decision.signals["ambiguity"] = {
                 "is_ambiguous": False,

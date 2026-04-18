@@ -649,7 +649,7 @@ function connectWS() {
   ws.onmessage = (ev) => {
     try {
       const msg = JSON.parse(ev.data);
-      if (msg.type === 'trace') addTrace(msg.data);
+      if (msg.type === 'trace' && !_sendingQuery) addTrace(msg.data);
       if (msg.type === 'degradation') loadModels();
       if (msg.type === 'prompt_adapted') {
         var d = msg.data;
@@ -755,12 +755,14 @@ function enlargeImage() {
 // ----------------------------------------------------------------
 // Send query
 // ----------------------------------------------------------------
+var _sendingQuery = false;
 async function sendQuery() {
   const q = document.getElementById('query-input').value.trim();
   if (!q) return;
   var strategyEl = document.getElementById('strategy-select');
   var strategy = strategyEl ? strategyEl.value : 'auto';
   document.getElementById('send-btn').textContent = '...';
+  _sendingQuery = true;
   try {
     // Build messages with image if attached
     var content;
@@ -811,6 +813,7 @@ async function sendQuery() {
   } catch(e) {
     console.error('Route error:', e);
   }
+  _sendingQuery = false;
   document.getElementById('send-btn').textContent = 'Route';
 }
 

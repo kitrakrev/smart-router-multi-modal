@@ -700,10 +700,15 @@ async def add_model(request: ModelAddRequest) -> JSONResponse:
         cost_per_1k_output=request.cost_per_1k_output,
         avg_latency_ms=request.avg_latency_ms,
         quality_score=request.quality_score,
+        approved=False,  # new models need probing before routing
     )
     model_registry.add_model(entry)
     stats_tracker.set_expected_latency(entry.name, entry.avg_latency_ms)
-    return JSONResponse({"status": "added", "model": entry.to_dict()})
+    return JSONResponse({
+        "status": "added",
+        "model": entry.to_dict(),
+        "note": "Model added but NOT approved. Probe it first to discover specialties, then approve.",
+    })
 
 
 @app.delete("/v1/models/{name}")
@@ -768,7 +773,23 @@ async def probe_model(name: str) -> JSONResponse:
         query_fn = sim_query
 
     report = await capability_prober.probe_model(name, query_fn)
-    return JSONResponse(report.to_dict())
+
+    # Auto-populate specialties based on probe scores
+    discovered_specialties = []
+    for spec, score in report.specialty_scores.items():
+        if score >= 0.5:  # at least 50% keyword match
+            discovered_specialties.append(spec)
+
+    if discovered_specialties:
+        model_registry.update_model(name, specialties=discovered_specialties)
+        # Auto-approve if model passed at least one specialty
+        model_registry.update_model(name, approved=True)
+        logger.info("Model %s probed: specialties=%s, auto-approved", name, discovered_specialties)
+
+    result = report.to_dict()
+    result["discovered_specialties"] = discovered_specialties
+    result["auto_approved"] = len(discovered_specialties) > 0
+    return JSONResponse(result)
 
 
 @app.post("/v1/models/discover")

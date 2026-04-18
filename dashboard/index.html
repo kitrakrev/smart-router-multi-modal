@@ -450,7 +450,7 @@ textarea.input { resize: vertical; min-height: 60px; font-family: var(--mono); f
         <input type="file" accept="image/*" id="image-input" style="display:none">
       </div>
       <div id="image-preview" style="display:none;position:relative">
-        <img id="image-thumb" style="max-width:80px;max-height:60px;border-radius:4px;border:1px solid var(--border);cursor:pointer" onclick="enlargeImage()">
+        <img id="image-thumb" style="max-width:120px;max-height:90px;border-radius:6px;border:1px solid var(--border);cursor:pointer;image-rendering:pixelated" onclick="enlargeImage()">
         <button onclick="clearImage()" style="position:absolute;top:-6px;right:-6px;background:var(--red);color:white;border:none;border-radius:50%;width:18px;height:18px;font-size:11px;cursor:pointer;line-height:18px">x</button>
       </div>
     </div>
@@ -714,18 +714,28 @@ const sampleImages = {
 
 function generateSampleImage(r, g, b) {
   var c = document.createElement('canvas');
-  c.width = 64; c.height = 64;
+  c.width = 128; c.height = 128;
   var ctx = c.getContext('2d');
-  // Create gradient to look more realistic
-  var grad = ctx.createRadialGradient(32,32,5,32,32,32);
-  grad.addColorStop(0, 'rgb('+(r+30)+','+(g+30)+','+(b+30)+')');
-  grad.addColorStop(1, 'rgb('+r+','+g+','+b+')');
+  // Base gradient
+  var grad = ctx.createRadialGradient(64,64,10,64,64,64);
+  grad.addColorStop(0, 'rgb('+(r+40)+','+(g+40)+','+(b+40)+')');
+  grad.addColorStop(0.6, 'rgb('+r+','+g+','+b+')');
+  grad.addColorStop(1, 'rgb('+(r-20)+','+(g-20)+','+(b-20)+')');
   ctx.fillStyle = grad;
-  ctx.fillRect(0,0,64,64);
-  // Add some noise dots
-  for (var i=0; i<20; i++) {
-    ctx.fillStyle = 'rgba('+(r-40)+','+(g-40)+','+(b-40)+',0.5)';
-    ctx.fillRect(Math.random()*64, Math.random()*64, 2, 2);
+  ctx.fillRect(0,0,128,128);
+  // Add structure to look like medical image
+  for (var i=0; i<60; i++) {
+    var x = Math.random()*128, y = Math.random()*128;
+    var s = 1 + Math.random()*4;
+    ctx.fillStyle = 'rgba('+(r+Math.random()*60-30)+','+(g+Math.random()*60-30)+','+(b+Math.random()*60-30)+',0.4)';
+    ctx.beginPath();
+    ctx.arc(x, y, s, 0, Math.PI*2);
+    ctx.fill();
+  }
+  // Add grid lines for radiology look
+  if (r < 60) { // dark = radiology
+    ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+    for (var i=0; i<128; i+=16) { ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,128); ctx.stroke(); }
   }
   return c.toDataURL('image/png').split(',')[1];
 }
@@ -1248,6 +1258,7 @@ function renderModels(models, stats) {
     var s = statsMap[m.name] || {};
     var typeBadge = m.type === 'specialist' ? 'badge-specialist' : m.type === 'reasoning' ? 'badge-reasoning' : 'badge-generalist';
     var enabledStr = m.enabled ? '<span style="color:var(--green)">enabled</span>' : '<span style="color:var(--red)">disabled</span>';
+    if (!m.approved) enabledStr = '<span style="color:var(--yellow);font-weight:600">NEEDS PROBING</span>';
     var sparkline = renderSparkline(s.latency_history || []);
     var specAccHtml = '';
     if (s.per_specialty_accuracy) {

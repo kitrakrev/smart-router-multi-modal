@@ -243,6 +243,7 @@ class ModelAddRequest(BaseModel):
     type: str = "generalist"
     provider: str = "local"
     model_id: str = ""
+    api_base: str = ""
     capabilities: list[str] = Field(default_factory=lambda: ["text"])
     cost_per_1k_input: float = 0.0
     cost_per_1k_output: float = 0.0
@@ -692,6 +693,7 @@ async def add_model(request: ModelAddRequest) -> JSONResponse:
         type=request.type,
         provider=request.provider,
         model_id=request.model_id or request.name,
+        api_base=request.api_base,
         capabilities=request.capabilities,
         cost_per_1k_input=request.cost_per_1k_input,
         cost_per_1k_output=request.cost_per_1k_output,

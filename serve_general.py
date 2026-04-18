@@ -38,8 +38,8 @@ class ChatRequest(BaseModel):
 MODEL_CONFIGS = [
     {
         "name": "llava-1.6-7b",
-        "model_id": "llava-hf/llava-v1.6-mistral-7b-hf",
-        "aliases": ["llava-1.6-7b", "llava", "llava-hf/llava-v1.6-mistral-7b-hf"],
+        "model_id": "llava-hf/llava-1.5-7b-hf",
+        "aliases": ["llava-1.6-7b", "llava", "llava-hf/llava-1.5-7b-hf", "llava-hf/llava-v1.6-mistral-7b-hf"],
         "vision": True,
     },
 ]

@@ -54,7 +54,28 @@ overrides:
       Provide differential ranked by likelihood with management plan.
     params: {temperature: 0.1, max_tokens: 1024}
 
-  # MedAlpaca: text-only, strong on clinical QA — use detailed reasoning prompts
+  # MedAlpaca: text-only, strong on clinical QA — detailed reasoning prompts
+  "medalpaca-7b::pathology":
+    system_prompt: |
+      You are a pathologist specializing in histopathology. Analyze tissue descriptions.
+      Provide differential diagnosis with WHO classification. Discuss cellular features,
+      nuclear atypia, mitotic activity, and architectural patterns. Text-based analysis only.
+    params: {temperature: 0.1, max_tokens: 2048}
+
+  "medalpaca-7b::radiology":
+    system_prompt: |
+      You are a radiologist interpreting imaging reports. Structure as:
+      Clinical history → Findings → Impression → Recommendations.
+      Discuss differential diagnosis for each finding. Text-based analysis only.
+    params: {temperature: 0.1, max_tokens: 2048}
+
+  "medalpaca-7b::dermatology":
+    system_prompt: |
+      You are a dermatologist evaluating skin conditions from clinical descriptions.
+      Apply ABCDE criteria when relevant. Provide ranked differential diagnosis
+      with management plan and referral criteria. Text-based analysis only.
+    params: {temperature: 0.1, max_tokens: 2048}
+
   # Llama-3.1: general, good at code/reasoning — lean prompts
   "llama-3.1-8b::code":
     system_prompt: |

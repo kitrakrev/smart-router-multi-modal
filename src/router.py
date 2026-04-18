@@ -377,16 +377,16 @@ class MedVisionRouter:
         """
         capable = model_registry.get_capable_models(required_caps)
 
-        # Filter by specialty for medical queries — prefer explicit specialty match
-        if specialty.startswith("medical."):
-            spec_name = specialty.split(".")[1] if "." in specialty else specialty
-            # First: models that explicitly list this specialty
-            exact_match = [m for m in capable if spec_name in m.specialties]
+        # Filter by specialty — prefer models that explicitly list this specialty
+        spec_name = specialty.split(".")[-1] if "." in specialty else specialty
+        exact_match = [m for m in capable if spec_name in m.specialties]
+        if exact_match:
+            capable = exact_match
+        elif specialty.startswith("medical."):
             # Fallback: any model with medical capability
             broad_match = [m for m in capable if "medical" in m.capabilities]
-            specialty_models = exact_match if exact_match else broad_match
-            if specialty_models:
-                capable = specialty_models
+            if broad_match:
+                capable = broad_match
 
         # Filter out stats-disabled models
         capable = [

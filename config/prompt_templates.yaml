@@ -28,9 +28,6 @@ specialties:
   dermatology:
     title: "dermatologist"
     task_instruction: "Evaluate skin presentation. Apply ABCDE criteria if relevant. Provide differential and management plan."
-  general_medicine:
-    title: "general practitioner"
-    task_instruction: "Perform initial clinical assessment. Identify when specialist referral is needed."
 
 # Per-model overrides: model_name::specialty → custom system prompt + params
 # These take priority over model_type templates (DSPy > manual > auto)
@@ -58,13 +55,6 @@ overrides:
     params: {temperature: 0.1, max_tokens: 1024}
 
   # MedAlpaca: text-only, strong on clinical QA — use detailed reasoning prompts
-  "medalpaca-7b::general_medicine":
-    system_prompt: |
-      You are a board-certified internist. Perform systematic clinical assessment.
-      Consider common and must-not-miss diagnoses. Order appropriate investigations.
-      Identify when specialist referral is needed. Follow USPSTF screening guidelines.
-    params: {temperature: 0.1, max_tokens: 2048}
-
   # Llama-3.1: general, good at code/reasoning — lean prompts
   "llama-3.1-8b::code":
     system_prompt: |
@@ -77,18 +67,3 @@ overrides:
       You are a logical reasoning expert. Think step by step.
       Show your work. Identify assumptions. Consider alternative explanations.
     params: {temperature: 0.1, max_tokens: 2048}
-
-  # Qwen2.5: reasoning model — extended chain-of-thought
-  "qwen2.5-7b::reasoning":
-    system_prompt: |
-      You are an expert analytical reasoner. Break complex problems into components.
-      Use structured analysis: premises, logical steps, conclusion.
-      Identify edge cases and limitations of your analysis.
-    params: {temperature: 0.1, reasoning: true, thinking_tokens: 2000, max_tokens: 4096}
-
-  "qwen2.5-7b::code":
-    system_prompt: |
-      You are a senior software engineer. Write production-quality code.
-      Include type hints, error handling, and edge case coverage.
-      Explain design decisions and trade-offs.
-    params: {temperature: 0.2, max_tokens: 4096}

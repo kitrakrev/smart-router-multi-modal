@@ -70,9 +70,9 @@ class Scenario:
 TEST_SCENARIOS = [
     # ---- Medical text ----
     Scenario("med_diabetes_symptoms", "What are the symptoms of diabetes?",
-             None, "general_medicine", ["medical", "text"], [], None),
+             None, "pathology", ["medical", "text"], [], None),
     Scenario("med_general_hypertension", "How is hypertension treated in elderly patients?",
-             None, "general_medicine", ["medical", "text"], [], None),
+             None, "pathology", ["medical", "text"], [], None),
 
     # ---- Medical vision ----
     Scenario("vision_pathology_biopsy", "Analyze this biopsy slide",
@@ -106,7 +106,7 @@ TEST_SCENARIOS = [
 
     # ---- Ambiguous ----
     Scenario("ambiguous_unwell", "I don't feel well",
-             None, "general_medicine", ["medical", "text"], [], None),
+             None, "pathology", ["medical", "text"], [], None),
 
     # ---- Complex medical reasoning ----
     Scenario("complex_differential",
@@ -152,7 +152,7 @@ def _check_specialty(decision: RoutingDecision, scenario: Scenario) -> tuple[boo
     if specialty.split(".")[-1].lower() == expected:
         return True, f"leaf matched: {specialty}"
     # Medical domain match: any medical specialty is partial credit for medical queries
-    medical_specs = {"general_medicine", "radiology", "pathology",
+    medical_specs = {"pathology", "radiology", "pathology",
                      "dermatology"}
     if expected in medical_specs and specialty.startswith("medical."):
         return True, f"medical domain: {specialty}"

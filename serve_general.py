@@ -42,11 +42,6 @@ MODEL_CONFIGS = [
         "aliases": ["llama-3.1-8b", "llama", "meta-llama/Llama-3.1-8B-Instruct"],
     },
     {
-        "name": "qwen2.5-7b",
-        "model_id": "Qwen/Qwen2.5-7B-Instruct",
-        "aliases": ["qwen2.5-7b", "qwen", "Qwen/Qwen2.5-7B-Instruct"],
-    },
-    {
         "name": "llava-1.6-7b",
         "model_id": "llava-hf/llava-v1.6-mistral-7b-hf",
         "aliases": ["llava-1.6-7b", "llava", "llava-hf/llava-v1.6-mistral-7b-hf"],

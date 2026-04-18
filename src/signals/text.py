@@ -35,12 +35,6 @@ SPECIALTY_EXEMPLARS: dict[str, list[str]] = {
         "dermoscopic features of melanoma vs nevus",
         "psoriasis treatment options and severity grading",
     ],
-    "medical.general_medicine": [
-        "routine health screening recommendations",
-        "hypertension initial workup and management",
-        "diabetes type 2 lifestyle modifications",
-        "preventive care guidelines for adults",
-    ],
     "general.code": [
         "write a Python function to sort a list",
         "debug this JavaScript async await code",

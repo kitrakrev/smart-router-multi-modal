@@ -320,7 +320,7 @@ async def _run_pipeline(
         signals_result = _simulate_signals(query, has_image)
         signal_latencies["simulated"] = 5.0
 
-    specialty = signals_result.get("specialty", "general_medicine")
+    specialty = signals_result.get("specialty", "general.simple_qa")
     complexity = signals_result.get("complexity", 0.5)
     safety_score = signals_result.get("safety", 0.0)
     image_type = signals_result.get("image_type", "")
@@ -459,7 +459,7 @@ def _simulate_signals(query: str, has_image: bool) -> dict[str, Any]:
             break
 
     # Specialty detection (keyword-based fallback)
-    specialty = "general_medicine"
+    specialty = "general.simple_qa"
     specialty_sim = 0.5
     specialty_keywords = {
         "pathology": ["histology", "biopsy", "tissue", "pathology", "cytology", "morphology"],
@@ -951,12 +951,11 @@ async def submit_feedback(request: FeedbackRequest) -> JSONResponse:
                     result = await classifier.classify(refine_prompt)
                     refinement = result.domain  # LLM output repurposed
                     # Fallback to structured refinement if LLM gives domain label
-                    if refinement in ("pathology", "radiology", "dermatology", "general_medicine"):
+                    if refinement in ("pathology", "radiology", "dermatology"):
                         refinements = {
                             "pathology": "Describe histological features systematically. Include WHO classification, grade, and margin status. Cite morphological evidence for each finding.",
                             "radiology": "Use structured reporting: Technique, Findings by region, Impression, Recommendations. Compare with prior studies when relevant.",
                             "dermatology": "Apply dermoscopic criteria (ABCDE, 7-point checklist). Provide differential diagnosis ranked by likelihood with management plan.",
-                            "general_medicine": "Consider both common and must-not-miss diagnoses. Include relevant investigations and referral criteria.",
                         }
                         refinement = refinements.get(refinement, "Provide more detailed, evidence-based analysis with structured reasoning.")
                     adapted_prompt = current.system_prompt.rstrip() + "\n\n" + refinement

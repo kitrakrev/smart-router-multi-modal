@@ -14,7 +14,7 @@ Flow:
 Usage:
   from src.fallback_classifier import fallback_classifier
   result = await fallback_classifier.classify("Is this normal?")
-  # result.domain = "general_medicine"
+  # result.domain = "pathology"
   # result.confidence = 0.85
 """
 
@@ -28,28 +28,23 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 VALID_DOMAINS = [
-    "pathology", "radiology", "dermatology", "general_medicine",
-    "cardiology", "ophthalmology", "emergency", "pharmacology",
+    "pathology", "radiology", "dermatology",
     "code", "reasoning", "creative", "simple_qa",
 ]
 
 CLASSIFY_PROMPT = """You are a medical query classifier. Classify the user's query into exactly one domain.
 
-Valid domains: pathology, radiology, dermatology, cardiology, ophthalmology, emergency, pharmacology, general_medicine, code, reasoning, creative, simple_qa
+Valid domains: pathology, radiology, dermatology, code, reasoning, creative, simple_qa
 
 Rules:
-- If the query mentions tissue, biopsy, cells, histology → pathology
-- If the query mentions X-ray, CT, MRI, scan, imaging → radiology
+- If the query mentions tissue, biopsy, cells, histology, microscopy → pathology
+- If the query mentions X-ray, CT, MRI, scan, imaging, chest → radiology
 - If the query mentions skin, lesion, rash, mole, dermoscopy → dermatology
-- If the query mentions heart, ECG, cardiac → cardiology
-- If the query mentions eye, retina, fundus, vision → ophthalmology
-- If the query mentions emergency, trauma, urgent, cardiac arrest → emergency
-- If the query mentions drug, medication, dose, interaction → pharmacology
 - If the query is about code or programming → code
 - If the query needs logical analysis → reasoning
 - If the query is creative writing → creative
 - If it's a simple factual question → simple_qa
-- If unclear or could be multiple → general_medicine
+- If unclear but seems medical → pathology
 
 Respond with ONLY the domain name, nothing else.
 
@@ -116,8 +111,8 @@ class FallbackClassifier:
     async def classify(self, query: str) -> ClassificationResult:
         if not self._loaded:
             return ClassificationResult(
-                domain="general_medicine", confidence=0.0,
-                source="fallback_default", model_used="none",
+                domain="pathology", confidence=0.1,
+                source="fallback_default_no_llm", model_used="none",
             )
 
         loop = asyncio.get_event_loop()
@@ -149,7 +144,7 @@ class FallbackClassifier:
         elapsed_ms = (time.perf_counter() - t0) * 1000
 
         # Parse domain from response
-        domain = "general_medicine"
+        domain = "pathology"
         for d in VALID_DOMAINS:
             if d in response:
                 domain = d

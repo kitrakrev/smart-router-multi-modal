@@ -131,22 +131,18 @@ class CapabilityProber:
         report = ModelProbeReport(model_name=model_name)
         specialty_scores: dict[str, list[float]] = {}
 
-        questions = self.get_probe_questions()
-        for q in questions:
-            if q["type"] == "vision_test":
-                # Skip vision probes for now (need image)
-                continue
+        questions = [q for q in self.get_probe_questions() if q.get("type") != "vision_test"]
 
+        # Run all probe queries in PARALLEL for speed (~5s vs ~40s sequential)
+        async def run_one(q):
             try:
                 response = await query_fn(q["question"])
             except Exception as exc:
                 logger.error("Probe failed for %s on %r: %s", model_name, q["question"], exc)
                 response = ""
-
             expected = q.get("expected_contains", [])
             accuracy, matched = self.score_response(response, expected)
-
-            result = ProbeResult(
+            return ProbeResult(
                 specialty=q["specialty"],
                 question=q["question"],
                 response=response,
@@ -154,12 +150,16 @@ class CapabilityProber:
                 matched_keywords=matched,
                 accuracy=accuracy,
             )
-            report.results.append(result)
 
-            spec = q["specialty"]
+        import asyncio
+        results = await asyncio.gather(*[run_one(q) for q in questions])
+
+        for result in results:
+            report.results.append(result)
+            spec = result.specialty
             if spec not in specialty_scores:
                 specialty_scores[spec] = []
-            specialty_scores[spec].append(accuracy)
+            specialty_scores[spec].append(result.accuracy)
 
         # Average accuracy per specialty
         for spec, scores in specialty_scores.items():

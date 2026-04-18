@@ -256,6 +256,7 @@ class DiscoverRequest(BaseModel):
 class SimulateRequest(BaseModel):
     model_name: str
     latency_spike_ms: float = 5000.0
+    duration_s: float = 60.0
 
 class SpecialtyAddRequest(BaseModel):
     name: str
@@ -877,7 +878,7 @@ async def model_stats() -> JSONResponse:
 @app.post("/v1/stats/simulate")
 async def simulate_degradation(request: SimulateRequest) -> JSONResponse:
     """Simulate model degradation for demo."""
-    result = stats_tracker.simulate_degradation(request.model_name, request.latency_spike_ms)
+    result = stats_tracker.simulate_degradation(request.model_name, request.latency_spike_ms, request.duration_s)
     # Also disable in registry
     if result.get("disabled"):
         model_registry.update_model(request.model_name, enabled=False)

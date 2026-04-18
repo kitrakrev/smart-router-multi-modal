@@ -1157,7 +1157,7 @@ function renderModels(models, stats) {
       '<div class="model-actions">' +
         '<button class="btn" onclick="document.getElementById(\'edit-' + m.name + '\').style.display=document.getElementById(\'edit-' + m.name + '\').style.display===\'none\'?\'block\':\'none\'">Edit</button>' +
         '<button class="btn" onclick="probeModel(\'' + m.name + '\')">Probe</button>' +
-        '<button class="btn btn-red" onclick="simulateDeg(\'' + m.name + '\')">Degrade (5s)</button>' +
+        '<button class="btn btn-red" onclick="simulateDeg(\'' + m.name + '\')">Slow Down (60s)</button>' +
         (m.enabled
           ? '<button class="btn" onclick="toggleModel(\'' + m.name + '\',false)">Disable</button>'
           : '<button class="btn btn-green" onclick="toggleModel(\'' + m.name + '\',true)">Enable</button>') +
@@ -1351,11 +1351,11 @@ async function simulateDeg(name) {
   try {
     var resp = await fetch(API + '/v1/stats/simulate', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({model_name: name, latency_spike_ms: 5000})
+      body: JSON.stringify({model_name: name, latency_spike_ms: 5000, duration_s: 60})
     });
     var data = await resp.json();
     loadModels();
-    alert(name + ' degraded: EMA=' + data.new_ema_latency.toFixed(0) + 'ms, disabled=' + data.disabled);
+    alert(name + ' degraded for 60s: EMA=' + data.new_ema_latency + 'ms\n' + (data.note || ''));
   } catch(e) { alert('Simulate failed: ' + e); }
 }
 
@@ -1364,11 +1364,11 @@ async function simulateDegCustom(name) {
   try {
     var resp = await fetch(API + '/v1/stats/simulate', {
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({model_name: name, latency_spike_ms: spike})
+      body: JSON.stringify({model_name: name, latency_spike_ms: spike, duration_s: 60})
     });
     var data = await resp.json();
     loadModels();
-    alert(name + ' injected ' + spike + 'ms spike: EMA=' + data.new_ema_latency.toFixed(0) + 'ms, errors=' + (data.new_error_rate*100).toFixed(1) + '%, disabled=' + data.disabled);
+    alert(name + ' injected ' + spike + 'ms latency for 60s\nEMA=' + data.new_ema_latency + 'ms\n' + (data.note || ''));
   } catch(e) { alert('Spike inject failed: ' + e); }
 }
 

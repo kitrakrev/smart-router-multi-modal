@@ -32,6 +32,8 @@ class ModelRuntimeStats:
     disable_reason: Optional[str] = None
     last_update: float = field(default_factory=time.time)
     latency_history: list[float] = field(default_factory=list)  # last 50 for sparkline
+    _degradation_until: float = 0.0  # timestamp when degradation ends
+    _degradation_latency: float = 0.0  # injected latency during degradation
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -47,6 +49,8 @@ class ModelRuntimeStats:
             "disabled_at": self.disabled_at,
             "disable_reason": self.disable_reason,
             "latency_history": self.latency_history[-50:],
+            "degraded": self._degradation_until > time.time(),
+            "degradation_remaining_s": max(0, round(self._degradation_until - time.time())),
         }
 
 
@@ -78,6 +82,10 @@ class StatsTracker:
         s = self._get_or_create(model_name)
         s.total_requests += 1
         s.last_update = time.time()
+
+        # Inject simulated latency during degradation window
+        if s._degradation_until > time.time():
+            latency_ms = max(latency_ms, s._degradation_latency)
 
         # EMA latency
         if s.latency_ema == 0:
@@ -163,18 +171,32 @@ class StatsTracker:
 
         return acc * 0.4 + latency_norm * 0.3 + reliability * 0.3
 
-    def simulate_degradation(self, model_name: str, latency_spike_ms: float = 5000.0) -> dict:
-        """Simulate a model degradation for demo purposes."""
+    def simulate_degradation(
+        self, model_name: str, latency_spike_ms: float = 5000.0, duration_s: float = 60.0
+    ) -> dict:
+        """Simulate model latency degradation for demo.
+
+        Injects high-latency (but successful) requests to shift EMA upward.
+        Model stays enabled but router sees it as slow → prefers alternatives.
+        After duration_s, latency naturally recovers via EMA decay on normal requests.
+        """
         s = self._get_or_create(model_name)
-        # Inject several bad data points to trigger EMA shift
+        # Inject slow but SUCCESSFUL requests — simulates real-world latency spike
         for _ in range(10):
-            self.update_stats(model_name, latency_spike_ms, success=False)
+            self.update_stats(model_name, latency_spike_ms, success=True)
+
+        # Set a degradation window — model is artificially slow for duration_s
+        s._degradation_until = time.time() + duration_s
+        s._degradation_latency = latency_spike_ms
+
         return {
             "model": model_name,
             "simulated_latency": latency_spike_ms,
-            "new_ema_latency": s.latency_ema,
-            "new_error_rate": s.error_rate_ema,
+            "duration_s": duration_s,
+            "new_ema_latency": round(s.latency_ema, 1),
+            "new_error_rate": round(s.error_rate_ema, 4),
             "disabled": s.disabled_at is not None,
+            "note": f"Model will appear slow for {duration_s}s. EMA will recover naturally after.",
         }
 
     async def recovery_check_loop(

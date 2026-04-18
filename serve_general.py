@@ -53,9 +53,14 @@ def load_model(name: str, model_id: str, is_vision: bool = False):
 
     if is_vision:
         # Vision models need specific model class
-        from transformers import LlavaNextForConditionalGeneration
+        try:
+            from transformers import LlavaNextForConditionalGeneration
+            model_cls = LlavaNextForConditionalGeneration
+        except Exception:
+            from transformers import AutoModelForVision2Seq
+            model_cls = AutoModelForVision2Seq
         tokenizer = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
-        model = LlavaNextForConditionalGeneration.from_pretrained(
+        model = model_cls.from_pretrained(
             model_id,
             torch_dtype=torch.float16,
             device_map="auto",

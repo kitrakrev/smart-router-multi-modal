@@ -168,12 +168,53 @@ def generate_completion(model_info: dict, messages: List[ChatMessage],
     model = model_info["model"]
     tokenizer = model_info["tokenizer"]
 
-    # Build prompt
+    # Extract text and images from messages
+    text_parts = []
+    images = []
+    for m in messages:
+        if isinstance(m.content, str):
+            text_parts.append(m.content)
+        elif isinstance(m.content, list):
+            for block in m.content:
+                if isinstance(block, dict):
+                    if block.get("type") == "text":
+                        text_parts.append(block.get("text", ""))
+                    elif block.get("type") == "image_url":
+                        url = block.get("image_url", {}).get("url", "")
+                        if url.startswith("data:"):
+                            try:
+                                img_b64 = url.split(",", 1)[1] if "," in url else url
+                                img_bytes = base64.b64decode(img_b64)
+                                from PIL import Image as PILImage
+                                img = PILImage.open(io.BytesIO(img_bytes)).convert("RGB")
+                                images.append(img)
+                            except Exception:
+                                pass
+
+    # Build messages for chat template
+    is_multimodal_model = model_info.get("type") == "multimodal"
+    text_messages = []
+    for m in messages:
+        if isinstance(m.content, str):
+            text_messages.append({"role": m.role, "content": m.content})
+        elif isinstance(m.content, list):
+            if is_multimodal_model and images:
+                # For multimodal models (MedGemma): use {"type":"image"} format
+                content_parts = []
+                for block in m.content:
+                    if isinstance(block, dict):
+                        if block.get("type") == "text":
+                            content_parts.append({"type": "text", "text": block.get("text", "")})
+                        elif block.get("type") == "image_url":
+                            content_parts.insert(0, {"type": "image"})
+                text_messages.append({"role": m.role, "content": content_parts})
+            else:
+                # Text-only: just join text parts
+                parts = [block.get("text", "") for block in m.content
+                         if isinstance(block, dict) and block.get("type") == "text"]
+                text_messages.append({"role": m.role, "content": " ".join(parts)})
+
     try:
-        text_messages = [{"role": m.role, "content": m.content if isinstance(m.content, str) else " ".join(
-            p.get("text", "") for p in m.content if isinstance(p, dict) and p.get("type") == "text"
-        )} for m in messages]
-        # Try chat template (works for most models)
         template_fn = getattr(tokenizer, "apply_chat_template", None)
         if template_fn is None and hasattr(tokenizer, "tokenizer"):
             template_fn = getattr(tokenizer.tokenizer, "apply_chat_template", None)
@@ -188,9 +229,14 @@ def generate_completion(model_info: dict, messages: List[ChatMessage],
 
     start = time.time()
 
-    # Handle AutoProcessor (MedGemma) vs regular tokenizer
+    # Handle multimodal (MedGemma with images) vs text-only
     is_processor = hasattr(tokenizer, "image_processor")
-    if is_processor:
+    if is_processor and images:
+        # Multimodal: pass image + text through processor
+        print(f"[DEBUG] Multimodal prompt has <image>: {'<image>' in prompt}, len={len(prompt)}")
+        print(f"[DEBUG] Prompt preview: {prompt[:200]}")
+        inputs = tokenizer(text=prompt, images=images[0], return_tensors="pt", truncation=True, max_length=2048)
+    elif is_processor:
         inputs = tokenizer(text=prompt, return_tensors="pt", truncation=True, max_length=2048)
     else:
         inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)

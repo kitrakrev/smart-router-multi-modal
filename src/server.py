@@ -900,13 +900,40 @@ async def submit_feedback(request: FeedbackRequest) -> JSONResponse:
     user_pref = user_mem.model_preference_score(request.model_name)
     global_perf = stats_tracker.performance_score(request.model_name)
 
+    # Runtime prompt adaptation: if model gets consistently bad feedback
+    # on a specialty, append a refinement instruction to the prompt
+    prompt_adapted = False
+    s = stats_tracker.get_stats(request.model_name)
+    if s and request.specialty in s.per_specialty_accuracy:
+        spec_acc = s.per_specialty_accuracy[request.specialty]
+        spec_count = s.per_specialty_count.get(request.specialty, 0)
+        # If accuracy drops below 0.5 after 5+ feedbacks, adapt prompt
+        if spec_acc < 0.5 and spec_count >= 5:
+            current = prompt_manager.get_prompt(
+                request.model_name, "specialist", request.specialty
+            )
+            adapted_prompt = (
+                current.system_prompt.rstrip()
+                + "\n\nIMPORTANT: Previous responses in this area received negative feedback. "
+                "Be more thorough, cite evidence, and provide step-by-step reasoning."
+            )
+            prompt_manager.set_manual_override(
+                request.model_name, request.specialty, adapted_prompt
+            )
+            prompt_adapted = True
+            logger.info(
+                "Auto-adapted prompt for %s::%s (accuracy=%.2f after %d feedbacks)",
+                request.model_name, request.specialty, spec_acc, spec_count,
+            )
+
     return JSONResponse({
         "status": "recorded",
         "user_model_score": round(user_pref, 4),
         "global_model_score": round(global_perf, 4),
+        "prompt_adapted": prompt_adapted,
         "note": (
-            "User-level adjustment applied"
-            if request.rating < 0.5
+            "Prompt auto-adapted due to low accuracy" if prompt_adapted
+            else "User-level adjustment applied" if request.rating < 0.5
             else "Positive feedback recorded"
         ),
     })
@@ -962,6 +989,46 @@ async def prompt_matrix() -> JSONResponse:
 async def get_prompt(model_type: str, specialty: str) -> JSONResponse:
     result = prompt_manager.get_prompt("", model_type, specialty)
     return JSONResponse(result.to_dict())
+
+
+class PromptUpdateRequest(BaseModel):
+    model_name: str
+    specialty: str
+    system_prompt: str
+    params: Optional[dict] = None
+
+
+@app.post("/v1/prompts/update")
+async def update_prompt(request: PromptUpdateRequest) -> JSONResponse:
+    """Live-update a model×specialty prompt override.
+
+    Takes effect immediately — next query using this model+specialty
+    will use the new prompt. Shows in the Prompts tab as 'override'.
+    """
+    prompt_manager.set_manual_override(
+        model_name=request.model_name,
+        specialty=request.specialty,
+        system_prompt=request.system_prompt,
+        params=request.params,
+    )
+
+    # Broadcast update via WebSocket
+    await broadcaster.broadcast({
+        "type": "prompt_update",
+        "data": {
+            "model_name": request.model_name,
+            "specialty": request.specialty,
+            "prompt_preview": request.system_prompt[:100],
+        },
+    })
+
+    return JSONResponse({
+        "status": "updated",
+        "model_name": request.model_name,
+        "specialty": request.specialty,
+        "source": "manual",
+        "prompt_preview": request.system_prompt[:100],
+    })
 
 
 # ---------------------------------------------------------------------------

@@ -1542,16 +1542,38 @@ renderPromptMatrix = function(matrix) {
 function showPromptDetail(cell) {
   var modal = document.getElementById('prompt-modal');
   var content = document.getElementById('prompt-modal-content');
-  var srcBadge = cell.source === 'dspy' ? 'badge-dspy' : cell.source === 'manual' ? 'badge-manual' : 'badge-auto';
+  var srcBadge = cell.source === 'dspy' ? 'badge-dspy' : cell.source === 'manual' ? 'badge-manual' : cell.source === 'override' ? 'badge-manual' : 'badge-auto';
+  var modelLabel = cell.model_name || cell.model_type || 'auto';
   content.innerHTML =
-    '<h3 style="margin-bottom:12px">' + cell.specialty + ' x ' + cell.model_type + '</h3>' +
+    '<h3 style="margin-bottom:12px">' + modelLabel + ' x ' + cell.specialty + '</h3>' +
     '<div style="margin-bottom:8px"><span class="badge ' + srcBadge + '">' + cell.source + '</span></div>' +
     '<div class="card-title">System Prompt</div>' +
-    '<pre style="background:var(--bg);padding:12px;border-radius:6px;font-family:var(--mono);font-size:12px;white-space:pre-wrap;margin-bottom:12px;color:var(--text2)">' + escHtml(cell.full_prompt) + '</pre>' +
+    '<textarea id="prompt-edit-text" style="width:100%;min-height:150px;background:var(--bg);color:var(--text);border:1px solid var(--border);padding:12px;border-radius:6px;font-family:var(--mono);font-size:12px;margin-bottom:12px;resize:vertical">' + escHtml(cell.full_prompt) + '</textarea>' +
     '<div class="card-title">Parameters</div>' +
     '<pre style="background:var(--bg);padding:12px;border-radius:6px;font-family:var(--mono);font-size:12px;color:var(--text2)">' + JSON.stringify(cell.params, null, 2) + '</pre>' +
-    '<div style="margin-top:16px;text-align:right"><button class="btn" onclick="document.getElementById(\'prompt-modal\').classList.remove(\'show\')">Close</button></div>';
+    '<div style="margin-top:16px;display:flex;gap:8px;justify-content:flex-end">' +
+      '<button class="btn btn-green" onclick="savePromptLive(\'' + escHtml(modelLabel) + '\',\'' + escHtml(cell.specialty) + '\')">Save & Apply Live</button>' +
+      '<button class="btn" onclick="document.getElementById(\'prompt-modal\').classList.remove(\'show\')">Close</button>' +
+    '</div>';
   modal.classList.add('show');
+}
+
+async function savePromptLive(modelName, specialty) {
+  var newPrompt = document.getElementById('prompt-edit-text').value;
+  try {
+    var resp = await fetch(API + '/v1/prompts/update', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        model_name: modelName,
+        specialty: specialty,
+        system_prompt: newPrompt,
+      })
+    });
+    var data = await resp.json();
+    document.getElementById('prompt-modal').classList.remove('show');
+    loadPrompts();
+    alert('Prompt updated live!\n' + modelName + ' x ' + specialty + '\nSource: manual override\nNext query will use this prompt.');
+  } catch(e) { alert('Save failed: ' + e); }
 }
 
 // ----------------------------------------------------------------

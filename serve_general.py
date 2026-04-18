@@ -14,7 +14,7 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, AutoProcessor
 
 app = FastAPI(title="General LLM Server", version="1.0.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -47,20 +47,30 @@ MODEL_CONFIGS = [
 MODEL_ALIASES: Dict[str, str] = {}
 
 
-def load_model(name: str, model_id: str):
+def load_model(name: str, model_id: str, is_vision: bool = False):
     print(f"[INFO] Loading {model_id}...")
     start = time.time()
 
-    tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
-    if tokenizer.pad_token is None:
-        tokenizer.pad_token = tokenizer.eos_token
-
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id,
-        torch_dtype=torch.float16,
-        device_map="auto",
-        trust_remote_code=True,
-    )
+    if is_vision:
+        # Vision models need specific model class
+        from transformers import LlavaNextForConditionalGeneration
+        tokenizer = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+        model = LlavaNextForConditionalGeneration.from_pretrained(
+            model_id,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(model_id, trust_remote_code=True)
+        if tokenizer.pad_token is None:
+            tokenizer.pad_token = tokenizer.eos_token
+        model = AutoModelForCausalLM.from_pretrained(
+            model_id,
+            torch_dtype=torch.float16,
+            device_map="auto",
+            trust_remote_code=True,
+        )
     model.eval()
 
     elapsed = time.time() - start
@@ -68,7 +78,7 @@ def load_model(name: str, model_id: str):
     print(f"[INFO] {name} loaded in {elapsed:.1f}s, GPU mem: {mem:.1f}GB")
     print(f"[OK] {name} ready!")
 
-    return {"model": model, "tokenizer": tokenizer, "model_id": model_id}
+    return {"model": model, "tokenizer": tokenizer, "model_id": model_id, "type": "multimodal" if is_vision else "text"}
 
 
 def generate(model_info: dict, messages: List[ChatMessage], max_tokens: int, temperature: float, top_p: float):
@@ -166,7 +176,7 @@ async def startup():
 
     for cfg in MODEL_CONFIGS:
         try:
-            info = load_model(cfg["name"], cfg["model_id"])
+            info = load_model(cfg["name"], cfg["model_id"], is_vision=cfg.get("vision", False))
             MODELS[cfg["name"]] = info
             for alias in cfg["aliases"]:
                 MODEL_ALIASES[alias] = cfg["name"]

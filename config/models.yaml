@@ -1,10 +1,11 @@
-# Model runner endpoint (H200 at 192.168.50.221:8001)
-model_runner_base: "http://localhost:8001"
+# H200 (192.168.50.221:8001 via SSH tunnel) — medical specialist models
+# A100 (localhost:8002) — general/reasoning models
 
 models:
+  # ── H200 Medical Models ────────────────────────────────────────────
   - name: medgemma-4b
     type: specialist
-    provider: model_runner
+    provider: h200
     model_id: google/medgemma-1.5-4b-it
     api_base: "http://localhost:8001"
     capabilities: [vision, medical, text]
@@ -13,20 +14,9 @@ models:
     avg_latency_ms: 300
     quality_score: 0.85
 
-  - name: llava-med-7b
-    type: specialist
-    provider: model_runner
-    model_id: microsoft/llava-med-v1.5-mistral-7b
-    api_base: "http://localhost:8001"
-    capabilities: [vision, medical, text]
-    cost_per_1k_input: 0.07
-    cost_per_1k_output: 0.21
-    avg_latency_ms: 500
-    quality_score: 0.80
-
   - name: medalpaca-7b
     type: specialist
-    provider: model_runner
+    provider: h200
     model_id: medalpaca/medalpaca-7b
     api_base: "http://localhost:8001"
     capabilities: [medical, text]
@@ -35,22 +25,23 @@ models:
     avg_latency_ms: 400
     quality_score: 0.75
 
+  # ── A100 General Models ────────────────────────────────────────────
   - name: llama-3.1-8b
     type: generalist
-    provider: model_runner
+    provider: a100
     model_id: meta-llama/Llama-3.1-8B-Instruct
-    api_base: "http://localhost:8001"
-    capabilities: [text, code, reasoning]
+    api_base: "http://localhost:8002"
+    capabilities: [text, code, reasoning, vision]
     cost_per_1k_input: 0.03
     cost_per_1k_output: 0.06
     avg_latency_ms: 200
-    quality_score: 0.70
+    quality_score: 0.78
 
   - name: qwen2.5-7b
     type: reasoning
-    provider: model_runner
+    provider: a100
     model_id: Qwen/Qwen2.5-7B-Instruct
-    api_base: "http://localhost:8001"
+    api_base: "http://localhost:8002"
     capabilities: [text, reasoning, code, tools]
     cost_per_1k_input: 0.07
     cost_per_1k_output: 0.21

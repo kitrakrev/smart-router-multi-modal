@@ -160,34 +160,51 @@ class PromptManager:
         return None
 
     def get_prompt_matrix(self) -> list[dict[str, Any]]:
-        """Return the full model x specialty prompt matrix for the dashboard."""
+        """Return the full prompt matrix for the dashboard.
+
+        Includes both model_type × specialty (auto-generated) and
+        model_name × specialty (overrides) entries.
+        """
         matrix = []
         specialties = self._engine.list_specialties()
 
+        # 1. Model-type × specialty (auto-generated templates)
         for spec in specialties:
             name = spec["name"]
             for mt in self._engine.list_model_types():
-                key_dspy = f"{mt}::{name}"
-                key_manual = f"{mt}::{name}"
-
-                if key_dspy in self._dspy_overrides:
-                    source = "dspy"
-                    prompt = self._dspy_overrides[key_dspy].get("system_prompt", "")
-                elif key_manual in self._manual_overrides:
-                    source = "manual"
-                    prompt = self._manual_overrides[key_manual].get("system_prompt", "")
-                else:
-                    source = "auto"
-                    prompt = self._engine.format_prompt(mt, name)
-
+                source = "auto"
+                prompt = self._engine.format_prompt(mt, name)
                 matrix.append({
                     "model_type": mt,
+                    "model_name": "",
                     "specialty": name,
                     "source": source,
-                    "prompt_preview": prompt[:50],
+                    "prompt_preview": prompt[:80],
                     "full_prompt": prompt,
                     "params": self._engine.get_params(mt),
                 })
+
+        # 2. Model-specific overrides (DSPy + manual)
+        all_overrides = {**self._manual_overrides, **self._dspy_overrides}
+        for key, val in all_overrides.items():
+            if "::" not in key:
+                continue
+            model_name, specialty = key.split("::", 1)
+            prompt = val.get("system_prompt", "")
+            source = "override" if key in self._manual_overrides else "dspy"
+            if key in self._dspy_overrides:
+                source = "dspy"
+            params = self._engine.get_params("specialist")
+            params.update(val.get("params", {}))
+            matrix.append({
+                "model_type": "",
+                "model_name": model_name,
+                "specialty": specialty,
+                "source": source,
+                "prompt_preview": prompt[:80],
+                "full_prompt": prompt,
+                "params": params,
+            })
 
         return matrix
 

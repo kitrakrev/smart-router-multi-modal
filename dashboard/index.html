@@ -609,16 +609,44 @@ function addTrace(t) {
         '<div class="value mono">' + costStr + '</div>' +
       '</div>' +
     '</div>' +
-    '<div class="prompt-collapse" onclick="togglePrompt(this)">Show prompt</div>' +
+    '<div style="display:flex;gap:8px;margin:6px 0">' +
+      '<div class="prompt-collapse" onclick="togglePrompt(this)">Show prompt</div>' +
+      '<div class="prompt-collapse" onclick="explainTrace(this,\'' + escHtml(t.query_preview||'') + '\')">Explain routing</div>' +
+    '</div>' +
     '<div class="prompt-text">' + escHtml(t.prompt_used || '') + '</div>' +
+    '<div class="explain-text" style="display:none;background:var(--bg2);padding:10px;border-radius:6px;margin-top:4px;font-family:var(--mono);font-size:12px;white-space:pre-wrap;color:var(--text2)"></div>' +
     '<div class="latency-breakdown">' + latencyHtml + '</div>';
   list.insertBefore(el, list.firstChild);
 }
 
 function togglePrompt(el) {
-  const txt = el.nextElementSibling;
+  const txt = el.parentElement.nextElementSibling;
   if (txt.style.display === 'block') { txt.style.display = 'none'; el.textContent = 'Show prompt'; }
   else { txt.style.display = 'block'; el.textContent = 'Hide prompt'; }
+}
+
+async function explainTrace(el, query) {
+  const explainDiv = el.parentElement.nextElementSibling.nextElementSibling;
+  if (explainDiv.style.display === 'block') {
+    explainDiv.style.display = 'none';
+    el.textContent = 'Explain routing';
+    return;
+  }
+  el.textContent = 'Loading...';
+  try {
+    const resp = await fetch(API + '/v1/explain', {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({query: query})
+    });
+    const data = await resp.json();
+    explainDiv.textContent = data.explanation_text || 'No explanation available';
+    explainDiv.style.display = 'block';
+    el.textContent = 'Hide explanation';
+  } catch(e) {
+    explainDiv.textContent = 'Error: ' + e;
+    explainDiv.style.display = 'block';
+    el.textContent = 'Explain routing';
+  }
 }
 
 function escHtml(s) {

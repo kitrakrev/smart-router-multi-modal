@@ -76,15 +76,15 @@ overrides:
       with management plan and referral criteria. Text-based analysis only.
     params: {temperature: 0.1, max_tokens: 2048}
 
-  # Llama-3.1: general, good at code/reasoning — lean prompts
-  "llama-3.1-8b::code":
+  # LLaVA-1.6: general vision + text model for non-medical queries
+  "llava-1.6-7b::code":
     system_prompt: |
-      You are an expert programmer. Write clean, efficient, well-documented code.
-      Include error handling. Follow language-specific best practices.
+      You are a programmer. Write clean, working code.
+      Include error handling and comments.
     params: {temperature: 0.2, max_tokens: 2048}
 
-  "llama-3.1-8b::reasoning":
+  "llava-1.6-7b::reasoning":
     system_prompt: |
-      You are a logical reasoning expert. Think step by step.
-      Show your work. Identify assumptions. Consider alternative explanations.
+      Think step by step. Show your reasoning.
+      Identify assumptions and consider alternatives.
     params: {temperature: 0.1, max_tokens: 2048}

@@ -779,9 +779,26 @@ function renderModels(models, stats) {
       '<div style="margin-bottom:6px">' + sparkline + '</div>' +
       '<div class="model-caps">' + capsHtml + '</div>' +
       (specAccHtml ? '<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">' + specAccHtml + '</div>' : '') +
+      '<div id="edit-' + m.name + '" style="display:none;margin:8px 0;padding:8px;background:var(--bg2);border-radius:6px">' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">' +
+          '<label class="small">Cost In/1K<input type="number" step="0.01" id="ei-' + m.name + '" value="' + m.cost_per_1k_input + '" style="width:100%;background:var(--bg1);color:var(--text1);border:1px solid var(--border);padding:4px;border-radius:4px"></label>' +
+          '<label class="small">Cost Out/1K<input type="number" step="0.01" id="eo-' + m.name + '" value="' + m.cost_per_1k_output + '" style="width:100%;background:var(--bg1);color:var(--text1);border:1px solid var(--border);padding:4px;border-radius:4px"></label>' +
+          '<label class="small">Avg Latency ms<input type="number" step="10" id="el-' + m.name + '" value="' + m.avg_latency_ms + '" style="width:100%;background:var(--bg1);color:var(--text1);border:1px solid var(--border);padding:4px;border-radius:4px"></label>' +
+        '</div>' +
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px">' +
+          '<label class="small">Quality (0-1)<input type="number" step="0.01" min="0" max="1" id="eq-' + m.name + '" value="' + m.quality_score + '" style="width:100%;background:var(--bg1);color:var(--text1);border:1px solid var(--border);padding:4px;border-radius:4px"></label>' +
+          '<label class="small">Sim. Latency Spike ms<input type="number" step="100" id="es-' + m.name + '" value="5000" style="width:100%;background:var(--bg1);color:var(--text1);border:1px solid var(--border);padding:4px;border-radius:4px"></label>' +
+        '</div>' +
+        '<div style="display:flex;gap:6px">' +
+          '<button class="btn btn-green" onclick="saveModelEdit(\'' + m.name + '\')">Save Changes</button>' +
+          '<button class="btn btn-red" onclick="simulateDegCustom(\'' + m.name + '\')">Inject Latency Spike</button>' +
+          '<button class="btn" onclick="document.getElementById(\'edit-' + m.name + '\').style.display=\'none\'">Cancel</button>' +
+        '</div>' +
+      '</div>' +
       '<div class="model-actions">' +
+        '<button class="btn" onclick="document.getElementById(\'edit-' + m.name + '\').style.display=document.getElementById(\'edit-' + m.name + '\').style.display===\'none\'?\'block\':\'none\'">Edit</button>' +
         '<button class="btn" onclick="probeModel(\'' + m.name + '\')">Probe</button>' +
-        '<button class="btn btn-red" onclick="simulateDeg(\'' + m.name + '\')">Simulate Degradation</button>' +
+        '<button class="btn btn-red" onclick="simulateDeg(\'' + m.name + '\')">Degrade (5s)</button>' +
         (m.enabled
           ? '<button class="btn" onclick="toggleModel(\'' + m.name + '\',false)">Disable</button>'
           : '<button class="btn btn-green" onclick="toggleModel(\'' + m.name + '\',true)">Enable</button>') +
@@ -813,12 +830,48 @@ async function probeModel(name) {
 
 async function simulateDeg(name) {
   try {
-    await fetch(API + '/v1/stats/simulate', {
+    var resp = await fetch(API + '/v1/stats/simulate', {
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({model_name: name, latency_spike_ms: 5000})
     });
+    var data = await resp.json();
     loadModels();
+    alert(name + ' degraded: EMA=' + data.new_ema_latency.toFixed(0) + 'ms, disabled=' + data.disabled);
   } catch(e) { alert('Simulate failed: ' + e); }
+}
+
+async function simulateDegCustom(name) {
+  var spike = parseFloat(document.getElementById('es-' + name).value) || 5000;
+  try {
+    var resp = await fetch(API + '/v1/stats/simulate', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({model_name: name, latency_spike_ms: spike})
+    });
+    var data = await resp.json();
+    loadModels();
+    alert(name + ' injected ' + spike + 'ms spike: EMA=' + data.new_ema_latency.toFixed(0) + 'ms, errors=' + (data.new_error_rate*100).toFixed(1) + '%, disabled=' + data.disabled);
+  } catch(e) { alert('Spike inject failed: ' + e); }
+}
+
+async function saveModelEdit(name) {
+  var body = {
+    cost_per_1k_input: parseFloat(document.getElementById('ei-' + name).value) || 0,
+    cost_per_1k_output: parseFloat(document.getElementById('eo-' + name).value) || 0,
+    avg_latency_ms: parseFloat(document.getElementById('el-' + name).value) || 500,
+    quality_score: parseFloat(document.getElementById('eq-' + name).value) || 0.7,
+  };
+  try {
+    var resp = await fetch(API + '/v1/models/' + name, {
+      method:'PUT', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    if (resp.ok) {
+      document.getElementById('edit-' + name).style.display = 'none';
+      loadModels();
+    } else {
+      alert('Update failed: ' + (await resp.text()));
+    }
+  } catch(e) { alert('Save failed: ' + e); }
 }
 
 async function toggleModel(name, enable) {

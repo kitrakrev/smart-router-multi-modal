@@ -33,6 +33,7 @@ class ModelEntry:
     quality_score: float = 0.7
     enabled: bool = True
     approved: bool = True  # human-approved for production use
+    api_base: str = ""  # endpoint URL for remote models
     specialties: list[str] = field(default_factory=list)
     added_at: float = field(default_factory=time.time)
 
@@ -49,6 +50,7 @@ class ModelEntry:
             "quality_score": self.quality_score,
             "enabled": self.enabled,
             "approved": self.approved,
+            "api_base": self.api_base,
             "specialties": self.specialties,
             "added_at": self.added_at,
         }
@@ -179,6 +181,7 @@ class ModelRegistry:
                 cost_per_1k_output=m.get("cost_per_1k_output", 0.0),
                 avg_latency_ms=m.get("avg_latency_ms", 500.0),
                 quality_score=m.get("quality_score", 0.7),
+                api_base=m.get("api_base", ""),
             )
             self.add_model(entry)
             count += 1

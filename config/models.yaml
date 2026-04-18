@@ -1,41 +1,48 @@
+# Model runner endpoint (H200 at 192.168.50.221:8001)
+model_runner_base: "http://192.168.50.221:8001"
+
 models:
   - name: medgemma-4b
     type: specialist
-    provider: local
+    provider: model_runner
     model_id: google/medgemma-1.5-4b-it
+    api_base: "http://192.168.50.221:8001"
     capabilities: [vision, medical, text]
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
+    cost_per_1k_input: 0.05
+    cost_per_1k_output: 0.15
     avg_latency_ms: 300
     quality_score: 0.85
 
   - name: llava-med-7b
     type: specialist
-    provider: local
+    provider: model_runner
     model_id: microsoft/llava-med-v1.5-mistral-7b
+    api_base: "http://192.168.50.221:8001"
     capabilities: [vision, medical, text]
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
+    cost_per_1k_input: 0.07
+    cost_per_1k_output: 0.21
     avg_latency_ms: 500
     quality_score: 0.80
 
   - name: medalpaca-7b
     type: specialist
-    provider: local
+    provider: model_runner
     model_id: medalpaca/medalpaca-7b
+    api_base: "http://192.168.50.221:8001"
     capabilities: [medical, text]
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
+    cost_per_1k_input: 0.07
+    cost_per_1k_output: 0.21
     avg_latency_ms: 400
     quality_score: 0.75
 
   - name: llama-3.1-8b
     type: generalist
-    provider: local
+    provider: model_runner
     model_id: meta-llama/Llama-3.1-8B-Instruct
+    api_base: "http://192.168.50.221:8001"
     capabilities: [text, code, reasoning]
-    cost_per_1k_input: 0.0
-    cost_per_1k_output: 0.0
+    cost_per_1k_input: 0.03
+    cost_per_1k_output: 0.06
     avg_latency_ms: 200
     quality_score: 0.70
 

@@ -42,6 +42,11 @@ from pydantic import BaseModel, Field
 
 import yaml
 
+try:
+    import httpx
+except ImportError:
+    httpx = None  # type: ignore
+
 # ---------------------------------------------------------------------------
 # Internal imports -- graceful fallback for flat vs. package layout
 # ---------------------------------------------------------------------------
@@ -523,23 +528,62 @@ async def chat_completions(request: ChatRequest) -> JSONResponse:
 
     trace = await _run_pipeline(query, has_image, user_id=user_id, session_id=session_id)
 
-    # Simulated model response (no actual model call in prototype)
-    response_text = (
-        f"[MedVisionRouter v2] Routed to {trace['model_selected']} "
-        f"(specialty: {trace['specialty_matched']}, "
-        f"complexity: {trace['complexity_score']:.2f})\n\n"
-        f"Prompt source: {trace['prompt_source']}\n"
-        f"Tools suggested: {', '.join(trace['tools_suggested']) or 'none'}\n\n"
-        f"[Model response would appear here in production]"
-    )
+    # Forward to model_runner if model has api_base
+    model_entry = model_registry.get_model(trace["model_selected"])
+    response_text = ""
+    model_latency_ms = 0.0
+    inference_success = True
+
+    if model_entry and model_entry.api_base and httpx is not None:
+        # Build forwarded request with system prompt from routing
+        fwd_messages = []
+        if trace.get("prompt_used"):
+            fwd_messages.append({"role": "system", "content": trace["prompt_used"]})
+        fwd_messages.extend([{"role": m.role, "content": m.content} for m in request.messages])
+
+        fwd_body = {
+            "model": model_entry.model_id,
+            "messages": fwd_messages,
+            "temperature": trace.get("params", {}).get("temperature", 0.1),
+            "max_tokens": trace.get("params", {}).get("max_tokens", 1024),
+        }
+
+        try:
+            mt0 = time.time()
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                resp = await client.post(
+                    f"{model_entry.api_base}/v1/chat/completions",
+                    json=fwd_body,
+                )
+                resp.raise_for_status()
+                model_resp = resp.json()
+            model_latency_ms = (time.time() - mt0) * 1000
+
+            choices = model_resp.get("choices", [])
+            if choices:
+                response_text = choices[0].get("message", {}).get("content", "")
+        except Exception as e:
+            logger.warning("Model runner call failed: %s", e)
+            inference_success = False
+            response_text = f"[Routing OK → {trace['model_selected']}] Model inference failed: {e}"
+    else:
+        response_text = (
+            f"[MedVisionRouter v2] Routed to {trace['model_selected']} "
+            f"(specialty: {trace['specialty_matched']}, "
+            f"complexity: {trace['complexity_score']:.2f})\n\n"
+            f"Prompt source: {trace['prompt_source']}\n"
+            f"Tools suggested: {', '.join(trace['tools_suggested']) or 'none'}\n\n"
+            f"[No model_runner configured — routing-only mode]"
+        )
 
     # Update stats
+    total_with_inference = trace["total_latency_ms"] + model_latency_ms
     stats_tracker.update_stats(
         trace["model_selected"],
-        trace["total_latency_ms"],
-        success=True,
+        total_with_inference,
+        success=inference_success,
         specialty=trace["specialty_matched"],
-        accuracy=0.8,
+        accuracy=0.8 if inference_success else 0.0,
     )
 
     return JSONResponse({
@@ -559,7 +603,7 @@ async def chat_completions(request: ChatRequest) -> JSONResponse:
             "completion_tokens": len(response_text.split()),
             "total_tokens": len(query.split()) + len(response_text.split()),
         },
-        "routing": trace,
+        "routing": {**trace, "model_latency_ms": round(model_latency_ms, 1)},
     })
 
 

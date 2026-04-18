@@ -780,51 +780,34 @@ async function sendQuery() {
     };
     if (strategy && strategy !== 'auto') body.budget_strategy = strategy;
 
-    // Step 1: Show routing card immediately with "loading" response
-    var tempId = 'temp-' + Date.now().toString(36);
-    var evalResp = await fetch(API + '/v1/eval', {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({query: q, has_image: !!imageBase64, image_base64: imageBase64 || undefined, user_id: 'dashboard-user'})
-    });
-    var evalData = await evalResp.json();
-    evalData._tempId = tempId;
-    addTrace(evalData);
-
-    // Step 2: Add loading indicator for model response
+    // Show loading card
     var loadingEl = document.createElement('div');
-    loadingEl.id = 'model-loading-' + tempId;
-    loadingEl.style.cssText = 'margin:-6px 0 10px;padding:10px 16px;background:var(--bg2);border:1px solid var(--border);border-top:none;border-radius:0 0 8px 8px;font-size:12px;color:var(--text2)';
-    loadingEl.innerHTML = '<span style="display:inline-block;animation:pulse 1s infinite">Waiting for ' + (evalData.model_selected || 'model') + ' response...</span>';
+    loadingEl.className = 'trace-item';
+    loadingEl.id = 'loading-card';
+    loadingEl.innerHTML = '<div style="display:flex;align-items:center;gap:8px;padding:8px 0"><span style="display:inline-block;animation:pulse 1s infinite;color:var(--accent)">Routing and waiting for model response...</span></div>';
     var traceList = document.getElementById('trace-list');
-    if (traceList.firstChild) traceList.insertBefore(loadingEl, traceList.firstChild.nextSibling);
+    traceList.insertBefore(loadingEl, traceList.firstChild);
 
-    // Step 3: Call model and update with response
+    // Single API call — routing + model inference together
+    var t0 = performance.now();
     const resp = await fetch(API + '/v1/chat/completions', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify(body)
     });
     const data = await resp.json();
-    var modelResponse = (data.choices && data.choices[0]) ? data.choices[0].message.content : '';
-    var modelLatency = data.routing ? data.routing.model_latency_ms : 0;
+    var totalTime = performance.now() - t0;
 
-    // Replace loading with actual response
-    var loadEl = document.getElementById('model-loading-' + tempId);
-    if (loadEl) {
-      if (modelResponse) {
-        loadEl.style.borderTop = '1px solid var(--border)';
-        loadEl.innerHTML = '<div style="font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:600">MODEL RESPONSE <span style="color:var(--text2);font-weight:400">(' + (modelLatency||0).toFixed(0) + 'ms)</span></div>' +
-          '<div style="font-size:12px;color:var(--text);white-space:pre-wrap;max-height:200px;overflow-y:auto">' + escHtml(modelResponse) + '</div>' +
-          '<div style="display:flex;gap:6px;margin-top:6px;align-items:center">' +
-            '<button class="btn btn-green" style="font-size:14px;padding:2px 8px" onclick="sendFeedback(\'' + (evalData.trace_id||'') + '\',\'' + (evalData.model_selected||'') + '\',\'' + (evalData.specialty_matched||'') + '\',1.0,this)">&#128077;</button>' +
-            '<button class="btn btn-red" style="font-size:14px;padding:2px 8px" onclick="sendFeedback(\'' + (evalData.trace_id||'') + '\',\'' + (evalData.model_selected||'') + '\',\'' + (evalData.specialty_matched||'') + '\',0.0,this)">&#128078;</button>' +
-            '<span class="text2 small feedback-status"></span>' +
-          '</div>';
-      } else {
-        loadEl.innerHTML = '<span style="color:var(--red)">No response from model</span>';
-      }
-    }
+    // Remove loading card
+    var lc = document.getElementById('loading-card');
+    if (lc) lc.remove();
+
+    // Build trace from routing data + model response
+    var trace = data.routing || {};
+    trace.model_response = (data.choices && data.choices[0]) ? data.choices[0].message.content : '';
+    trace.total_latency_ms = totalTime;
+    trace.model_latency_ms = data.routing ? (data.routing.model_latency_ms || 0) : 0;
+    addTrace(trace);
   } catch(e) {
     console.error('Route error:', e);
   }
@@ -965,8 +948,9 @@ function addTrace(t) {
       latencyHtml += '<span>' + k + ': ' + v.toFixed(1) + 'ms</span> ';
     });
   }
-  latencyHtml += '<span>routing: ' + (t.routing_latency_ms||0).toFixed(1) + 'ms</span>';
-  latencyHtml += '<span style="color:var(--accent)">total: ' + (t.total_latency_ms||0).toFixed(1) + 'ms</span>';
+  latencyHtml += '<span>routing: ' + (t.routing_latency_ms||0).toFixed(0) + 'ms</span>';
+  if (t.model_latency_ms) latencyHtml += '<span>model: ' + (t.model_latency_ms||0).toFixed(0) + 'ms</span>';
+  latencyHtml += '<span style="color:var(--accent)">total: ' + (t.total_latency_ms||0).toFixed(0) + 'ms</span>';
 
   const tools = (t.tools_suggested || []).join(', ') || 'none';
   const traceId = t.trace_id || Math.random().toString(36).slice(2,8);

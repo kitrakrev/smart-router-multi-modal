@@ -182,6 +182,7 @@ class ModelRegistry:
                 avg_latency_ms=m.get("avg_latency_ms", 500.0),
                 quality_score=m.get("quality_score", 0.7),
                 api_base=m.get("api_base", ""),
+                specialties=m.get("specialties", []),
             )
             self.add_model(entry)
             count += 1

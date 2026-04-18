@@ -1,10 +1,9 @@
-# H200 (192.168.50.221:8001 via SSH tunnel) — medical specialist models
-# A100 (localhost:8002) — general models
+# H200 — medical specialist models (via SSH tunnel to localhost:8001)
+# A100 — general model (localhost:8002)
 
 models:
-  # ── H200 Medical Specialists ───────────────────────────────────────
   - name: medgemma-4b
-    type: specialist
+    type: medical-vision
     provider: h200
     model_id: google/medgemma-1.5-4b-it
     api_base: "http://localhost:8001"
@@ -16,7 +15,7 @@ models:
     quality_score: 0.85
 
   - name: medalpaca-7b
-    type: specialist
+    type: medical-text
     provider: h200
     model_id: medalpaca/medalpaca-7b
     api_base: "http://localhost:8001"
@@ -27,9 +26,8 @@ models:
     avg_latency_ms: 400
     quality_score: 0.75
 
-  # ── A100 General Model ──────────────────────────────────────────────
   - name: llava-1.6-7b
-    type: generalist
+    type: general-vision
     provider: a100
     model_id: llava-hf/llava-v1.6-mistral-7b-hf
     api_base: "http://localhost:8002"

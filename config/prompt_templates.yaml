@@ -1,9 +1,9 @@
 model_types:
-  specialist:
-    template: "You are a {specialty_title}. {task_instruction}"
+  medical-vision:
+    template: "You are a {specialty_title}. {task_instruction} Analyze both images and text when available."
     params: {temperature: 0.1, max_tokens: 1024}
 
-  generalist:
+  medical-text:
     template: |
       You are a {specialty_title} providing a clinical assessment.
       Approach systematically:
@@ -12,11 +12,11 @@ model_types:
       3. Provide differential diagnosis ranked by likelihood
       4. Recommend next steps and investigations
       {task_instruction}
-    params: {temperature: 0.1, reasoning: true, thinking_tokens: 500, max_tokens: 2048}
+    params: {temperature: 0.1, max_tokens: 2048}
 
-  reasoning:
-    template: "Expert {specialty_title} consultation. {task_instruction} Think step by step. Provide evidence-based reasoning."
-    params: {temperature: 0, reasoning: true, thinking_tokens: 1000, max_tokens: 2048}
+  general-vision:
+    template: "You are a helpful assistant. {task_instruction} Answer clearly and concisely."
+    params: {temperature: 0.2, max_tokens: 2048}
 
 specialties:
   pathology:
@@ -29,10 +29,10 @@ specialties:
     title: "dermatologist"
     task_instruction: "Evaluate skin presentation. Apply ABCDE criteria if relevant. Provide differential and management plan."
 
-# Per-model overrides: model_name::specialty → custom system prompt + params
-# These take priority over model_type templates (DSPy > manual > auto)
+# Per-model overrides (model_name::specialty)
+# Priority: feedback-adapted > manual override > auto template
 overrides:
-  # MedGemma: multimodal, good at vision — use concise clinical prompts
+  # MedGemma-4B: vision + medical — concise image-focused prompts
   "medgemma-4b::pathology":
     system_prompt: |
       You are a board-certified pathologist with expertise in histopathology and cytology.
@@ -54,7 +54,7 @@ overrides:
       Provide differential ranked by likelihood with management plan.
     params: {temperature: 0.1, max_tokens: 1024}
 
-  # MedAlpaca: text-only, strong on clinical QA — detailed reasoning prompts
+  # MedAlpaca-7B: text-only medical — detailed reasoning prompts
   "medalpaca-7b::pathology":
     system_prompt: |
       You are a pathologist specializing in histopathology. Analyze tissue descriptions.
@@ -76,7 +76,7 @@ overrides:
       with management plan and referral criteria. Text-based analysis only.
     params: {temperature: 0.1, max_tokens: 2048}
 
-  # LLaVA-1.6: general vision + text model for non-medical queries
+  # LLaVA-1.6-7B: general vision+text — lean prompts
   "llava-1.6-7b::code":
     system_prompt: |
       You are a programmer. Write clean, working code.

@@ -115,6 +115,8 @@ class TextSignalModel:
     _lock: asyncio.Lock = asyncio.Lock()
 
     # Model priority: try best first, fall back
+    # Try trained model first, fall back to off-the-shelf
+    TRAINED_MODEL = "trained_router_v2"  # local path, fine-tuned BioLORD on 9K medical dataset
     MEDICAL_MODEL = "FremyCompany/BioLORD-2023"
     GENERAL_MODEL = "BAAI/bge-small-en-v1.5"
     FALLBACK_MODEL = "all-MiniLM-L6-v2"
@@ -157,17 +159,29 @@ class TextSignalModel:
         self._load_taxonomy_exemplars()
         all_exemplars = {**SPECIALTY_EXEMPLARS, **self._taxonomy_exemplars}
 
-        # Try loading dual models
+        # Try loading trained model first, then fall back to off-the-shelf
         medical_loaded = False
         general_loaded = False
 
+        # Check for trained model (fine-tuned on medical routing dataset)
+        trained_path = Path(__file__).resolve().parent.parent.parent / self.TRAINED_MODEL
         try:
-            self._medical_model = SentenceTransformer(self.MEDICAL_MODEL)
-            logger.info("Loaded medical embedding: %s", self.MEDICAL_MODEL)
-            medical_loaded = True
-            self._models_loaded.append(self.MEDICAL_MODEL)
+            if trained_path.exists():
+                self._medical_model = SentenceTransformer(str(trained_path))
+                logger.info("Loaded TRAINED medical embedding: %s", trained_path)
+                medical_loaded = True
+                self._models_loaded.append(f"trained:{self.TRAINED_MODEL}")
+            else:
+                raise FileNotFoundError(f"Trained model not found at {trained_path}")
         except Exception as e:
-            logger.warning("BioLORD unavailable (%s), will use fallback", e)
+            logger.info("Trained model unavailable (%s), trying BioLORD", e)
+            try:
+                self._medical_model = SentenceTransformer(self.MEDICAL_MODEL)
+                logger.info("Loaded medical embedding: %s", self.MEDICAL_MODEL)
+                medical_loaded = True
+                self._models_loaded.append(self.MEDICAL_MODEL)
+            except Exception as e2:
+                logger.warning("BioLORD also unavailable (%s), will use fallback", e2)
 
         try:
             self._general_model = SentenceTransformer(self.GENERAL_MODEL)

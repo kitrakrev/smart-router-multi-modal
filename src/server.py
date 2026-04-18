@@ -290,7 +290,15 @@ async def _run_pipeline(
     if _signals_available:
         try:
             sig_t0 = time.time()
-            messages_for_signals = [{"role": "user", "content": query}]
+            # Build messages with image if present
+            if image_data:
+                img_str = image_data.decode() if isinstance(image_data, bytes) else image_data
+                messages_for_signals = [{"role": "user", "content": [
+                    {"type": "text", "text": query},
+                    {"type": "image_url", "image_url": {"url": "data:image/png;base64," + img_str}},
+                ]}]
+            else:
+                messages_for_signals = [{"role": "user", "content": query}]
             result = await run_all_signals(messages_for_signals, image_data=image_data.decode() if isinstance(image_data, bytes) else None)
             signal_latencies["all_signals"] = (time.time() - sig_t0) * 1000
             signals_result = {
@@ -509,9 +517,10 @@ def _simulate_signals(query: str, has_image: bool) -> dict[str, Any]:
 @app.post("/v1/chat/completions")
 async def chat_completions(request: ChatRequest) -> JSONResponse:
     """OpenAI-compatible chat completions with routing."""
-    # Extract query from messages
+    # Extract query and image from messages
     query = ""
     has_image = False
+    image_b64 = None
     for msg in request.messages:
         if msg.role == "user":
             if isinstance(msg.content, str):
@@ -523,11 +532,20 @@ async def chat_completions(request: ChatRequest) -> JSONResponse:
                             query = block.get("text", "")
                         elif block.get("type") == "image_url":
                             has_image = True
+                            url = block.get("image_url", {}).get("url", "")
+                            if url.startswith("data:"):
+                                # Extract base64 data from data URI
+                                image_b64 = url.split(",", 1)[1] if "," in url else url
 
     user_id = request.user or "anonymous"
     session_id = request.session_id
+    budget = request.budget_strategy
 
-    trace = await _run_pipeline(query, has_image, user_id=user_id, session_id=session_id)
+    trace = await _run_pipeline(
+        query, has_image,
+        image_data=image_b64.encode() if image_b64 else None,
+        user_id=user_id, session_id=session_id,
+    )
 
     # Forward to model_runner if model has api_base
     model_entry = model_registry.get_model(trace["model_selected"])

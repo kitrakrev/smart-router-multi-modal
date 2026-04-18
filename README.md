@@ -1,8 +1,8 @@
-# Smart Router Multi-Modal
+# MedVisionRouter v2
 
-**Multi-modal LLM router with vision, tools, and real-time tracing.** Routes queries to the optimal model based on embedding similarity to decision exemplars -- budget-aware, adaptive, observable.
+**Medical multimodal router with vision, taxonomy-based specialty routing, DSPy-optimized prompts, and budget-aware model selection.** Routes clinical queries to the optimal medical model based on specialty detection, image type classification, and contrastive embeddings.
 
-![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)
+![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)
 ![License Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-green.svg)
 [![HuggingFace](https://img.shields.io/badge/HuggingFace-kitrakrev%2Fsmart--router--embeddings-yellow.svg)](https://huggingface.co/kitrakrev/smart-router-embeddings)
 
@@ -10,48 +10,51 @@
 
 ## What This Is
 
-A production-ready LLM routing layer that sits between your application and multiple LLM providers. Instead of hardcoding which model handles which query, the router:
+A production-grade medical LLM routing layer that sits between clinical applications and multiple medical/general AI models. The router:
 
-1. Extracts 9 signals from the incoming query (complexity, domain, safety, vision, tools, etc.)
-2. Matches the query against decision exemplar centroids using sentence embeddings (vLLM-SR style)
-3. Selects the cheapest capable model that satisfies the matched decision's requirements
-4. Applies safety guardrails, budget constraints, and adaptive health-aware routing
+1. **Extracts 9 signals** from the incoming query (safety, PII, vision, domain, complexity, etc.)
+2. **Two-level routing**: general vs medical, then specialty classification (pathology, radiology, cardiology, etc.)
+3. **Matches** queries against decision exemplar centroids using sentence embeddings (vLLM-SR style)
+4. **Selects** the cheapest capable model that satisfies the matched specialty's requirements
+5. **Applies** DSPy-optimized prompts, safety guardrails, budget constraints, and tool augmentation
 
-The result: complex math goes to reasoning models, simple QA goes to tiny local models, vision queries go to multimodal models -- all automatically, in under 15ms.
-
----
-
-## Key Features
-
-- **9 signal extractors** -- keyword, domain, complexity, language, safety, PII, vision, tool, modality
-- **Embedding-based decision matching** -- vLLM-SR style cosine similarity to decision exemplar centroids
-- **Budget-aware model selection** -- strategies: `cheapest_capable`, `quality_first`, `balanced`, `performance_weighted`
-- **Adaptive routing** -- EMA-based health tracking, auto-disable degraded models, auto-recover
-- **Dynamic model registry** -- add/remove/discover models via REST API at runtime
-- **Real-time dashboard** -- 7 tabs: traces, pipeline, models, stats, sessions, config, datasets
-- **Image upload + vision routing** -- detects image content and routes to vision-capable models
-- **Tool execution** -- 11 built-in tools (port scan, CVE lookup, firewall, vulnerability scan, etc.)
-- **Session/user tracking** -- per-session and per-user routing history and stats
-- **Hot-reloadable YAML config** -- update routing rules without restarting the server
-- **OpenAI-compatible API** -- drop-in replacement for `/v1/chat/completions`
+The result: a pathology VQA question with an image gets routed to MedGemma-4B with a pathologist system prompt; a simple drug interaction query goes to MedAlpaca with a pharmacology template and the `drug_interaction_check` tool -- all automatically, in under 15ms.
 
 ---
 
 ## Architecture
 
 ```
-Query ──> Guardrails ──> Signal Extractors ──> Decision Matcher ──> Capability Filter ──> Budget Selection ──> Model
-              |               |                      |                    |                     |
-         safety rules    9 parallel:            embedding cosine     require: [vision]     cheapest_capable
-         jailbreak       - keyword              similarity to        require: [tools]      quality_first
-         PII             - domain (MiniLM)      decision exemplar    require: [reasoning]  balanced
-                         - complexity           centroids            require: [text]       performance_weighted
-                         - language                  |
-                         - safety              matched decision
-                         - PII                 config (temp,
-                         - vision              max_tokens, etc.)
-                         - tool need
-                         - modality
+                           MedVisionRouter v2 Pipeline
+                           ===========================
+
+Query + Image ──> Safety Gate ──> Signal Extractors (9 parallel) ──> Two-Level Router ──> Model
+                      |                  |                                  |               |
+                  regex + embed     keyword, domain,               Level 1: general        budget-aware
+                  jailbreak/PHI     complexity, language,            vs medical             selection
+                  block / warn      safety, PII, vision,                |                     |
+                                    tool, modality              Level 2: specialty         cheapest_capable
+                                         |                      pathology                  quality_first
+                                    MiniLM-L6-v2               radiology                   balanced
+                                    embeddings                  cardiology                  performance_weighted
+                                                                dermatology
+                                                                ophthalmology
+                                                                emergency
+                                                                pharmacology
+                                                                general_medicine
+                                                                      |
+                                                               DSPy-optimized prompt
+                                                               + tool attachment
+                                                               + inference config
+
+Config files:
+  config/taxonomy.yaml        -- specialty tree (medical + general)
+  config/models.yaml          -- model pool (local + API)
+  config/prompt_templates.yaml -- per-specialty prompts + DSPy overrides
+  config/safety.yaml          -- regex + contrastive safety patterns
+  config/tools.yaml           -- tool definitions (drug_interaction, ICD codes, etc.)
+  config/probes.yaml          -- model capability probes
+  config/config.yaml          -- main routing config (decisions, budget, safety rules)
 ```
 
 ---
@@ -59,11 +62,11 @@ Query ──> Guardrails ──> Signal Extractors ──> Decision Matcher ─�
 ## Quick Start
 
 ```bash
-# Clone the repo
-git clone <repo-url> smart-router-multi-modal
-cd smart-router-multi-modal
+# Clone and enter the project
+git clone <repo-url> router-prototype
+cd router-prototype
 
-# One-command install + launch
+# One-command install and launch
 chmod +x setup.sh && ./setup.sh
 
 # Open the dashboard
@@ -80,108 +83,229 @@ uv run python -m src.server --host 0.0.0.0 --port 8000
 Test the eval endpoint (no API keys needed):
 
 ```bash
+# Medical text query
 curl -s -X POST http://localhost:8000/v1/eval \
   -H "Content-Type: application/json" \
-  -d '{"messages": [{"role": "user", "content": "Prove sqrt(2) is irrational"}]}' | python -m json.tool
+  -d '{"messages": [{"role": "user", "content": "What are the symptoms of diabetes?"}]}' \
+  | python -m json.tool
+
+# Medical query that should route to pathology
+curl -s -X POST http://localhost:8000/v1/eval \
+  -H "Content-Type: application/json" \
+  -d '{"messages": [{"role": "user", "content": "Analyze this biopsy slide for adenocarcinoma markers"}]}' \
+  | python -m json.tool
 ```
 
 ---
 
 ## How Routing Works
 
-The router uses a 3-layer approach inspired by vLLM-SR:
+### Level 1: General vs Medical
 
-### Layer 1: WHAT task? (Decision Matching)
+The domain signal (MiniLM embedding similarity against domain exemplars) classifies incoming queries as `medical`, `code`, `science`, `creative`, `math`, `legal`, or `general`. Medical queries proceed to specialty routing; general queries use the standard decision matcher.
 
-Each "decision" in `config/config.yaml` defines a task type (e.g., `complex_reasoning`, `code_generation`, `vision_task`) with a list of exemplar queries. At startup, the router encodes all exemplars using `all-MiniLM-L6-v2` (384-dim sentence embeddings) and computes a centroid for each decision.
+### Level 2: Specialty Classification
 
-At inference time, the incoming query is embedded and matched against all centroids via cosine similarity. The highest-scoring decision wins. No threshold cutoff -- the embedding match handles ALL queries.
+For medical queries, the router matches against a taxonomy tree defined in `config/taxonomy.yaml`:
 
-### Layer 2: WHICH model? (Capability + Budget)
+```
+medical/
+  cardiology/       (ecg, echocardiogram)
+  radiology/        (xray, ct, mri)
+  pathology/        (histology, cytology, gross_specimen)
+  dermatology/      (dermoscopy, clinical_photo)
+  ophthalmology/    (fundus, oct)
+  emergency/
+  pharmacology/
+  general_medicine/
 
-Each decision specifies:
-- `require`: list of capabilities the model must have (e.g., `[vision]`, `[reasoning, code]`)
-- `strategy`: how to pick among capable models (`cheapest_capable`, `quality_first`, `balanced`, `performance_weighted`)
+general/
+  code/
+  reasoning/
+  creative/
+  simple_qa/
+```
 
-The router filters the model pool to those with ALL required capabilities, then applies the budget strategy.
+Each specialty has associated image types, enabling vision-based routing (e.g., an uploaded histology image automatically routes to pathology).
 
-### Layer 3: HOW to call? (Inference Config)
+### Model Selection
 
-Each decision includes an inference config: `temperature`, `max_tokens`, `enable_reasoning`, `thinking_tokens`. This config is passed through to the model call, ensuring reasoning tasks get low temperature and high token limits while creative tasks get high temperature.
+Each routing decision specifies:
+- `require`: capabilities the model must have (e.g., `[vision, medical]`)
+- `strategy`: budget strategy (`cheapest_capable`, `quality_first`, `balanced`, `performance_weighted`)
+
+The router filters models from `config/models.yaml` and applies the strategy.
+
+### Prompt Selection
+
+`config/prompt_templates.yaml` defines per-specialty prompts (e.g., "You are a board-certified pathologist. Analyze tissue morphology..."). DSPy-optimized overrides are stored in the `overrides` section and take precedence when available.
 
 ---
 
-## Configuration
+## Config Reference
 
-The main config is at `config/config.yaml`. Structure:
+### taxonomy.yaml
 
-```yaml
-models:
-  - name: gpt-4o
-    provider: openai
-    cost_per_1k_input: 2.50        # USD per 1K input tokens
-    cost_per_1k_output: 10.00      # USD per 1K output tokens
-    avg_latency_ms: 800            # baseline latency
-    capabilities: [vision, tools, reasoning, text]
-    quality_score: 0.92            # 0-1, used by quality_first strategy
+Defines the two-level specialty tree with image type associations.
 
-  - name: qwen-3b-local
-    provider: local
-    cost_per_1k_input: 0.001
-    cost_per_1k_output: 0.003
-    avg_latency_ms: 50
-    capabilities: [text, general, fast]
-    quality_score: 0.45
+### models.yaml
 
-routing:
-  budget:
-    max_cost_per_query: 0.01       # USD hard cap
-    strategy: cheapest_capable     # default global strategy
-    quality_threshold: 0.7         # minimum quality for quality_first
+Model pool with capabilities, costs, and quality scores:
 
-  decisions:
-    - name: complex_reasoning
-      description: "Complex math, proofs, multi-step analysis"
-      exemplars:                   # queries that define this decision
-        - "prove that sqrt(2) is irrational"
-        - "derive the quadratic formula"
-        - "solve this system of differential equations"
-      require: [reasoning]         # model must have reasoning capability
-      strategy: quality_first      # pick best model, not cheapest
-      config:
-        temperature: 0
-        enable_reasoning: true
-        thinking_tokens: 1000
-        max_tokens: 4096
-      min_similarity: 0.25         # soft threshold (always picks best match)
+| Model | Type | Capabilities | Cost/1K out |
+|-------|------|-------------|-------------|
+| medgemma-4b | specialist | vision, medical, text | $0.00 (local) |
+| llava-med-7b | specialist | vision, medical, text | $0.00 (local) |
+| medalpaca-7b | specialist | medical, text | $0.00 (local) |
+| llama-3.1-8b | generalist | text, code, reasoning | $0.00 (local) |
+| gpt-4o | reasoning | vision, text, reasoning, tools, medical | $10.00 |
 
-    - name: simple_qa
-      description: "Simple factual questions"
-      exemplars:
-        - "what is the capital of France"
-        - "who invented the telephone"
-      require: [text]
-      strategy: cheapest_capable
-      config:
-        temperature: 0.1
-        max_tokens: 200
+### prompt_templates.yaml
 
-  safety_rules:
-    - name: jailbreak_block
-      if: "safety > 0.7"
-      action: block
-      reason: "Jailbreak attempt detected"
-    - name: pii_warning
-      if: "pii > 0.5"
-      action: warn
-      reason: "PII detected in query"
+Three model types (`specialist`, `generalist`, `reasoning`) with per-specialty customizations. The `overrides` section stores DSPy-optimized prompts with few-shot demos and accuracy metadata.
+
+### safety.yaml
+
+Regex patterns (jailbreak, PHI) and contrastive embedding exemplars (unsafe vs safe). Safety signal uses both layers: fast regex first, then embedding similarity for paraphrased attacks.
+
+### tools.yaml
+
+Tool definitions with exemplar triggers: `drug_interaction_check`, `clinical_guideline`, `lab_reference`, `dosage_calculator`, `icd_code_lookup`.
+
+### probes.yaml
+
+Specialty-specific capability probes with expected keywords for model validation.
+
+---
+
+## Benchmarks
+
+### PathVQA (Pathology Vision QA)
+
+5K samples from 32K total. Tests vision detection, pathology specialty routing, and vision-capable model selection.
+
+```bash
+python -m benchmarks.pathvqa --max-samples 5000 --verbose
 ```
+
+### PubMedQA (Clinical Text QA)
+
+1K labeled samples. Tests medical domain detection, medical model selection, and reasoning routing.
+
+```bash
+python -m benchmarks.pubmedqa --max-samples 1000 --verbose
+```
+
+### Scenario Tests
+
+24 curated scenarios covering medical text, medical vision, drug interactions, safety, general queries, ambiguous inputs, complex reasoning, and emergencies. Runs entirely offline (no model inference).
+
+```bash
+python -m benchmarks.scenario_tests --verbose
+```
+
+### RouterArena
+
+8,400 queries with ground truth from 3 models.
+
+| Metric | Value |
+|--------|-------|
+| Routing accuracy (809 overlap queries) | **86.8%** |
+| Average routing latency | 15ms |
+| Cost per 1K queries | $0.25 |
+
+### VL-RouterBench
+
+30K+ vision-language samples across 14 datasets and 17 VLMs.
+
+| Metric | Value |
+|--------|-------|
+| Routing accuracy | **83.8%** |
+| Rank score | 0.80 |
+
+### Running All Benchmarks
+
+```bash
+# Routing-only evaluation (no model server needed)
+python -m optimize.evaluate --all --mode routing-only
+
+# End-to-end evaluation (requires model server)
+python -m optimize.evaluate --all --mode end-to-end --api-base http://localhost:8000/v1
+```
+
+---
+
+## DSPy Optimization
+
+The DSPy optimizer fine-tunes prompts per (model, specialty) pair using MIPROv2. It loads a medical dataset, runs the optimizer to find optimal instructions and few-shot demos, then saves results to `config/prompt_templates.yaml`.
+
+### Single Pair
+
+```bash
+python -m optimize.dspy_optimizer \
+  --model medgemma-4b \
+  --specialty pathology \
+  --dataset pathvqa \
+  --api-base http://localhost:8000/v1
+```
+
+### All Pairs
+
+```bash
+python -m optimize.dspy_optimizer --all
+```
+
+### How It Works
+
+1. Load 100 train + 50 eval examples from the target dataset
+2. Configure DSPy with the target model (via OpenAI-compatible API)
+3. Define a `MedicalQA` signature: `question + context -> answer`
+4. Run MIPROv2 with 10 candidates and up to 3 bootstrapped demos
+5. Evaluate baseline vs optimized accuracy (token F1 + exact match)
+6. Save optimized prompt + demos to YAML with metadata
+
+Results are saved to `optimize/results/` and merged into `config/prompt_templates.yaml` overrides.
+
+---
+
+## Training Embeddings
+
+### Medical Routing Embeddings
+
+Fine-tune MiniLM-L6-v2 on medical datasets for better routing accuracy:
+
+```bash
+# Full training (works on CUDA, MPS, or CPU)
+python -m benchmarks.train_embeddings
+
+# Custom settings
+python -m benchmarks.train_embeddings \
+  --batch-size 256 \
+  --epochs 3 \
+  --output-dir models/med-routing-embeddings
+
+# Skip BioMedCLIP classifier
+python -m benchmarks.train_embeddings --skip-clip
+```
+
+Data sources (5K each, loaded partially):
+- **PathVQA**: pathology visual questions
+- **PubMedQA**: clinical text questions
+- **LMSYS 55K**: general queries (for contrast)
+
+Method: MultipleNegativesRankingLoss with in-batch negatives. Same specialty = positive pair, cross-specialty = negative. Includes medical domain exemplars for specialty-specific clustering.
+
+Optional: BioMedCLIP-based image type classifier (histology vs xray vs dermoscopy vs fundus vs clinical_photo).
+
+### General Routing Embeddings
+
+The existing training script in `training/train_routing_embeddings.py` trains on LMSYS 55K for general task-type clustering (code, math, creative, QA, etc.).
 
 ---
 
 ## API Reference
 
-### Chat & Evaluation
+### Chat and Evaluation
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -209,7 +333,7 @@ routing:
 | `PATCH` | `/v1/config/budget` | Update budget constraints only |
 | `POST` | `/v1/config/reload` | Reload config.yaml from disk |
 
-### Traces & Stats
+### Traces and Stats
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -217,20 +341,9 @@ routing:
 | `GET` | `/v1/trace/{id}` | Single trace by ID |
 | `GET` | `/v1/stats` | Aggregate routing statistics |
 | `GET` | `/v1/stats/models` | Runtime model performance stats |
-| `GET` | `/v1/stats/models/{name}` | Stats for a single model |
 | `WS` | `/ws/traces` | WebSocket live trace streaming |
 
-### Sessions & Users
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/v1/sessions` | List all sessions with query counts |
-| `GET` | `/v1/sessions/{id}/traces` | All traces for a session |
-| `GET` | `/v1/sessions/{id}/adaptive` | Adaptive updates during session |
-| `GET` | `/v1/users/{id}/traces` | All traces for a user |
-| `GET` | `/v1/users/{id}/stats` | User-level routing stats |
-
-### Tools & Dashboard
+### Tools and Dashboard
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -246,236 +359,83 @@ routing:
 The dashboard at `/dashboard` provides 7 tabs:
 
 1. **Live Traces** -- real-time feed of every routing decision via WebSocket, with signal breakdown radar charts
-2. **Pipeline Flow** -- visual node-to-node representation of the routing pipeline for each query
+2. **Pipeline Flow** -- visual representation of the routing pipeline for each query
 3. **Models** -- registered models with capabilities, costs, quality scores, and health status
-4. **Stats** -- aggregate metrics: total requests, model distribution, latency percentiles, cost per 1K queries
+4. **Stats** -- aggregate metrics: total requests, model distribution, latency percentiles, cost per 1K
 5. **Sessions** -- per-session query history and adaptive routing updates
-6. **Config** -- live view and editor for the YAML config, with hot-reload button
+6. **Config** -- live view and editor for YAML config with hot-reload
 7. **Datasets** -- benchmark dataset explorer for RouterArena and VL-RouterBench results
-
----
-
-## Training
-
-### Contrastive Embeddings
-
-The router uses `all-MiniLM-L6-v2` out of the box. For improved routing accuracy, we fine-tuned embeddings on LMSYS Arena 55K conversation data:
-
-- **Training data**: LMSYS Arena Human Preference 55K (chat conversations with model comparisons)
-- **Method**: MultipleNegativesRankingLoss -- queries with similar task profiles are pulled together, dissimilar ones pushed apart
-- **Key principle**: No model names in training labels. We train "query -> task profile" (complexity, reasoning need, tool need, etc.), not "query -> pick gpt-4o"
-- **Multi-head outputs**: task_type (7 classes), complexity (float), needs_reasoning, needs_vision, needs_tools, temperature, max_tokens, thinking_tokens, cost_sensitivity
-- **Pushed to HuggingFace**: [kitrakrev/smart-router-embeddings](https://huggingface.co/kitrakrev/smart-router-embeddings)
-
-Training scripts are in `training/`:
-- `finetune_lmsys.py` -- full multi-head classifier training on LMSYS 55K
-- `finetune_router.py` -- lightweight RouterArena classifier (deprecated)
-- `train_routing_embeddings.py` -- standalone contrastive embedding trainer (placeholder)
-
----
-
-## Benchmarks
-
-### RouterArena
-
-Evaluated against RouterArena's 8,400 queries with ground truth from 3 models (gpt-4o-mini, claude-3-haiku, gemini-2.0-flash).
-
-| Metric | Value |
-|--------|-------|
-| Routing accuracy (overlap, 809 queries) | **86.8%** |
-| Average routing latency | 15ms |
-| Cost per 1K queries | $0.25 |
-| Model pool | auto-discovered from benchmark data |
-
-### VL-RouterBench
-
-Evaluated against VL-RouterBench's 30K+ vision-language samples across 14 datasets and 17 VLMs.
-
-| Metric | Value |
-|--------|-------|
-| Routing accuracy | **83.8%** |
-| Rank score | 0.80 |
-| Datasets covered | 14 (ChartQA, DocVQA, MMMU, MathVista, etc.) |
-
-### Comparison vs vLLM-SR
-
-On the same RouterArena overlap data:
-
-| Router | Accuracy | Latency | Cost/1K |
-|--------|----------|---------|---------|
-| Smart Router (ours) | **86.8%** | 15ms | $0.25 |
-| vLLM-SR (baseline) | 69.1% | 22ms | $0.31 |
-
-**+17.7% accuracy** improvement over vLLM-SR on identical data.
-
----
-
-## Datasets Used
-
-| Dataset | Size | Usage |
-|---------|------|-------|
-| [LMSYS Arena 55K](https://huggingface.co/datasets/lmsys/chatbot_arena_conversations) | 55,000 conversations | Training contrastive embeddings |
-| [RouterArena](https://github.com/RouterArena/RouterArena) | 8,400 queries | Text routing benchmark (3 models) |
-| [VL-RouterBench](https://github.com/K1nght/VL-RouterBench) | 30,000+ samples | Vision-language routing benchmark (17 VLMs, 14 datasets) |
-| NVIDIA 4K | 4,000 | Reference only (not used in training or eval) |
-| Easy2Hard-Bench | varies | Reference only (not used in training or eval) |
-
----
-
-## Adaptive Routing
-
-The router tracks runtime performance of each model using exponential moving averages (EMA):
-
-- **Latency EMA**: smoothed average response time, auto-updated after each request
-- **Error rate EMA**: smoothed error rate, triggers auto-disable when > 50%
-- **Health status**: `healthy`, `degraded`, or `disabled`
-
-When a model is auto-disabled (due to sustained errors or extreme latency), the router:
-1. Removes it from the candidate pool immediately
-2. Starts a background recovery check loop (every 60s)
-3. Re-enables the model once health is restored
-
-The `performance_weighted` budget strategy uses runtime stats to score models:
-```
-score = accuracy * 0.4 + latency_score * 0.3 + cost_score * 0.3
-```
-
-You can simulate degradation for demo purposes via the API:
-```bash
-# Simulate high latency
-curl -X POST http://localhost:8000/v1/stats/simulate \
-  -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "scenario": "high_latency"}'
-
-# Recover
-curl -X POST http://localhost:8000/v1/stats/simulate \
-  -H "Content-Type: application/json" \
-  -d '{"model": "gpt-4o", "scenario": "recovery"}'
-```
 
 ---
 
 ## Project Structure
 
 ```
-smart-router-multi-modal/
-├── src/                              # Core application code
+router-prototype/
+├── src/                              # Core application
 │   ├── __init__.py
 │   ├── __main__.py                   # Entry point: python -m src
 │   ├── server.py                     # FastAPI server, all endpoints
 │   ├── router.py                     # Decision engine + model selection
 │   ├── signals.py                    # 9 signal extractors (parallel)
+│   ├── signals/vision.py             # Vision-specific signal logic
 │   ├── models.py                     # Dynamic model registry
 │   ├── models_api.py                 # Model CRUD REST API
 │   ├── tracer.py                     # Request tracing + session tracking
-│   ├── tools.py                      # Tool executor (11 tools)
-│   └── task_classifier.py            # LMSYS multi-head classifier
+│   ├── tools.py                      # Tool executor
+│   ├── task_classifier.py            # LMSYS multi-head classifier
+│   └── registry/                     # Model registry internals
 │
-├── config/                           # All configuration
-│   ├── config.yaml                   # Main config (models + decisions + budget)
-│   ├── config_routerarena.yaml       # RouterArena benchmark config
+├── config/                           # Configuration
+│   ├── config.yaml                   # Main config (decisions, budget, safety)
+│   ├── taxonomy.yaml                 # Medical specialty tree
+│   ├── models.yaml                   # Model pool (local + API)
+│   ├── prompt_templates.yaml         # Per-specialty prompts + DSPy overrides
+│   ├── safety.yaml                   # Regex + contrastive safety patterns
+│   ├── tools.yaml                    # Tool definitions + exemplar triggers
+│   ├── probes.yaml                   # Model capability probes
 │   └── generated/                    # Auto-generated benchmark configs
-│       ├── routerarena.yaml
-│       ├── vl_routerbench.yaml
-│       └── default.yaml -> ../config.yaml
+│
+├── optimize/                         # DSPy optimization pipeline
+│   ├── __init__.py
+│   ├── dspy_optimizer.py             # MIPROv2 prompt optimization per model x specialty
+│   ├── evaluate.py                   # Benchmark runner (routing-only + end-to-end)
+│   └── results/                      # Optimization results (YAML)
+│
+├── benchmarks/                       # Benchmark scripts + results
+│   ├── pathvqa.py                    # PathVQA routing benchmark (5K samples)
+│   ├── pubmedqa.py                   # PubMedQA routing benchmark (1K samples)
+│   ├── scenario_tests.py             # 24 curated scenario tests (offline)
+│   ├── train_embeddings.py           # Medical routing embedding trainer
+│   ├── benchmark_routerarena.py      # RouterArena evaluation
+│   ├── benchmark_vl_routerbench.py   # VL-RouterBench evaluation
+│   ├── generate_benchmark_config.py  # Auto-config generator
+│   └── results/                      # Benchmark output JSON
+│
+├── training/                         # General training scripts
+│   ├── finetune_lmsys.py             # LMSYS 55K multi-head classifier
+│   ├── finetune_router.py            # RouterArena classifier
+│   └── train_routing_embeddings.py   # General contrastive embeddings
 │
 ├── dashboard/                        # Frontend UI
 │   ├── index.html                    # Unified 7-tab dashboard
-│   ├── dashboard.html                # Legacy trace dashboard
-│   └── trace_dashboard.html          # Legacy node-to-node viz
+│   ├── dashboard.html
+│   └── trace_dashboard.html
 │
-├── benchmarks/                       # Benchmark scripts + results
-│   ├── benchmark_routerarena.py      # RouterArena evaluation
-│   ├── benchmark_vl_routerbench.py   # VL-RouterBench evaluation
-│   ├── generate_benchmark_config.py  # Auto-config generator from data
-│   ├── fill_fast.py                  # Ground truth fill script
-│   ├── results/                      # Benchmark output JSON
-│   │   ├── routerarena.json
-│   │   └── vl_routerbench.json
-│   └── vl_routerbench/               # VL-RouterBench dataset (gitignored)
-│
-├── training/                         # Training scripts
-│   ├── finetune_lmsys.py             # LMSYS 55K multi-head classifier
-│   ├── finetune_router.py            # RouterArena classifier (deprecated)
-│   └── train_routing_embeddings.py   # Contrastive embedding trainer
+├── models/                           # Trained model weights
+│   ├── med-routing-embeddings/       # Medical fine-tuned embeddings
+│   ├── lmsys-task-classifier/
+│   └── routerarena-classifier/
 │
 ├── presentation/                     # Hackathon presentation
 │   ├── slides.pptx
-│   ├── slides.html
-│   ├── create_pptx.py
 │   └── DEMO_SCRIPT.md
-│
-├── models/                           # Trained model weights (gitignored)
-│   ├── routing-embeddings/
-│   ├── lmsys-task-classifier/
-│   └── routerarena-classifier/
 │
 ├── setup.sh                          # One-command install + launch
 ├── run.sh                            # Quick start
 ├── pyproject.toml                    # Project metadata + dependencies
-├── requirements.txt                  # Pip requirements
-├── .gitignore
 └── uv.lock                          # Lockfile
 ```
-
----
-
-## Contributing
-
-### Add a New Signal
-
-1. Open `src/signals.py`
-2. Add a new async function following the pattern:
-   ```python
-   async def my_signal(messages: list[dict], **kwargs) -> SignalResult:
-       t0 = time.perf_counter()
-       # ... your analysis ...
-       return SignalResult(
-           name="my_signal",
-           score=0.5,          # 0-1
-           confidence=0.9,     # 0-1
-           execution_time_ms=(time.perf_counter() - t0) * 1000,
-           metadata={"key": "value"},
-       )
-   ```
-3. Register it in `run_all_signals()` at the bottom of the file
-
-### Add a New Decision
-
-Edit `config/config.yaml` and add a new entry under `routing.decisions`:
-
-```yaml
-- name: my_decision
-  description: "What this decision handles"
-  exemplars:
-    - "example query 1"
-    - "example query 2"
-  require: [text]          # or [vision], [tools], [reasoning], etc.
-  strategy: cheapest_capable
-  config:
-    temperature: 0.5
-    max_tokens: 1024
-```
-
-Hot-reload without restart: `POST /v1/config/reload`
-
-### Add a New Model
-
-Via API:
-```bash
-curl -X POST http://localhost:8000/v1/models \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "my-model",
-    "provider": "local",
-    "api_base": "http://localhost:8080/v1",
-    "capabilities": ["text", "code"],
-    "cost_per_1k_input": 0.01,
-    "cost_per_1k_output": 0.03
-  }'
-```
-
-Or add to `config/config.yaml` under `models:` and reload.
 
 ---
 

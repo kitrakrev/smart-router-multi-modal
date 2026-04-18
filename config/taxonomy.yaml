@@ -1,0 +1,35 @@
+medical:
+  cardiology:
+    children: [electrophysiology, interventional, heart_failure, imaging]
+    image_types: [ecg, echocardiogram]
+  radiology:
+    children: [chest, neuro, musculoskeletal, abdominal]
+    image_types: [xray, ct, mri]
+  pathology:
+    children: [surgical, cytology, dermatopathology, hematopathology, deep_lesions, neuropathology]
+    image_types: [histology, cytology, gross_specimen]
+  dermatology:
+    children: [clinical, surgical, cosmetic]
+    image_types: [dermoscopy, clinical_photo]
+  ophthalmology:
+    children: [retina, glaucoma, cornea]
+    image_types: [fundus, oct]
+  emergency:
+    children: []
+    image_types: [trauma]
+  pharmacology:
+    children: []
+    image_types: []
+  general_medicine:
+    children: []
+    image_types: []
+
+general:
+  code:
+    children: []
+  reasoning:
+    children: []
+  creative:
+    children: []
+  simple_qa:
+    children: []

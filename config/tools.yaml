@@ -1,0 +1,33 @@
+tools:
+  drug_interaction_check:
+    description: "Check drug-drug interactions and contraindications"
+    exemplars:
+      - "is metformin safe with lisinopril"
+      - "drug interaction between warfarin and aspirin"
+      - "contraindications for combining SSRIs and MAOIs"
+
+  clinical_guideline:
+    description: "Look up clinical practice guidelines"
+    exemplars:
+      - "current guidelines for hypertension management"
+      - "ACC/AHA recommendations for heart failure"
+      - "screening guidelines for colorectal cancer"
+
+  lab_reference:
+    description: "Look up normal lab value ranges"
+    exemplars:
+      - "normal range for troponin"
+      - "what is normal creatinine level"
+      - "reference range for TSH"
+
+  dosage_calculator:
+    description: "Calculate medication dosages"
+    exemplars:
+      - "amoxicillin dose for child weighing 25kg"
+      - "insulin sliding scale calculation"
+
+  icd_code_lookup:
+    description: "Look up ICD-10 diagnostic codes"
+    exemplars:
+      - "ICD-10 code for type 2 diabetes"
+      - "diagnosis code for acute appendicitis"

@@ -1,28 +1,29 @@
 [project]
-name = "smart-router-multi-modal"
-version = "1.0.0"
-description = "Intelligent LLM query router with vision, tools, and real-time traces"
+name = "med-vision-router"
+version = "2.0.0"
+description = "Intelligent medical vision query router with specialty taxonomy and adaptive model selection"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
+    "sentence-transformers>=2.2.0",
+    "transformers>=4.40.0",
+    "torch>=2.0.0",
+    "open-clip-torch>=2.24.0",
     "pyyaml>=6.0",
-    "langdetect>=1.0.9",
     "httpx>=0.25.0",
     "websockets>=12.0",
     "pydantic>=2.0",
+    "numpy>=1.24.0",
+    "Pillow>=10.0.0",
 ]
 
 [project.optional-dependencies]
-embeddings = [
-    "sentence-transformers>=2.2.0",
-    "numpy>=1.24.0",
-]
-benchmark = [
-    "tqdm>=4.65.0",
-]
+dspy = ["dspy-ai"]
+benchmarks = ["datasets", "pandas", "tqdm"]
 
 [dependency-groups]
 dev = [
     "tqdm>=4.65.0",
+    "pytest>=7.0.0",
 ]

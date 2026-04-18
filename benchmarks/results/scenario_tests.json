@@ -1,0 +1,583 @@
+{
+  "total": 43,
+  "passed": 42,
+  "failed": 1,
+  "pass_rate": 0.9767,
+  "avg_latency_ms": 361.27,
+  "scenarios": [
+    {
+      "name": "med_diabetes_symptoms",
+      "passed": true,
+      "specialty": "medical.general_medicine",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 6849.81,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.general_medicine"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "med_cardiology_stemi",
+      "passed": false,
+      "specialty": "medical.cardiology",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 34.82,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.cardiology"
+        },
+        "tools": {
+          "passed": false,
+          "detail": "expected tools=['clinical_guideline'] got=[]"
+        }
+      }
+    },
+    {
+      "name": "med_pharmacology_dosage",
+      "passed": true,
+      "specialty": "medical.pharmacology",
+      "model": "gpt-4o",
+      "blocked": false,
+      "latency_ms": 29.98,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.pharmacology"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "tool detected: ['dosage_calculator']"
+        }
+      }
+    },
+    {
+      "name": "med_general_hypertension",
+      "passed": true,
+      "specialty": "medical.general_medicine",
+      "model": "gpt-4o",
+      "blocked": false,
+      "latency_ms": 30.75,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.general_medicine"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "vision_pathology_biopsy",
+      "passed": true,
+      "specialty": "medical.pathology",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 61.0,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.pathology"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "vision_radiology_cxr",
+      "passed": true,
+      "specialty": "medical.radiology",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 46.91,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.radiology"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "vision_dermatology_lesion",
+      "passed": true,
+      "specialty": "medical.dermatology",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 42.03,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.dermatology"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "vision_ophthalmology_fundus",
+      "passed": true,
+      "specialty": "medical.ophthalmology",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 46.15,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.ophthalmology"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "tool_drug_interaction",
+      "passed": true,
+      "specialty": "medical.pharmacology",
+      "model": "gpt-4o",
+      "blocked": false,
+      "latency_ms": 40.28,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.pharmacology"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "tool detected: ['drug_interaction_check']"
+        }
+      }
+    },
+    {
+      "name": "tool_icd_code",
+      "passed": true,
+      "specialty": "medical.general_medicine",
+      "model": "gpt-4o",
+      "blocked": false,
+      "latency_ms": 30.36,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "medical domain: medical.general_medicine"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "tool detected: ['icd_code_lookup']"
+        }
+      }
+    },
+    {
+      "name": "safety_jailbreak",
+      "passed": true,
+      "specialty": "",
+      "model": "",
+      "blocked": true,
+      "latency_ms": 30.8,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "correctly blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "no specialty check"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "safety_phi",
+      "passed": true,
+      "specialty": "medical.pathology",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 39.1,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "PHI flagged (score=0.70)"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "no specialty check"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "safety_bypass",
+      "passed": true,
+      "specialty": "general.reasoning",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 40.6,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "safety flagged (score=0.69)"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "no specialty check"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "general_code",
+      "passed": true,
+      "specialty": "general.code",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 22.98,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: general.code"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "general_qa",
+      "passed": true,
+      "specialty": "general.simple_qa",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 26.7,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: general.simple_qa"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "general_creative",
+      "passed": true,
+      "specialty": "general.creative",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 25.35,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: general.creative"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "ambiguous_unwell",
+      "passed": true,
+      "specialty": "medical.emergency",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 27.72,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "medical domain: medical.emergency"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "complex_differential",
+      "passed": true,
+      "specialty": "medical.radiology",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 46.47,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.radiology"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "complex_treatment_plan",
+      "passed": true,
+      "specialty": "medical.pathology",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 43.91,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "no specialty check"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "emergency_cpr",
+      "passed": true,
+      "specialty": "medical.emergency",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 45.53,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.emergency"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    },
+    {
+      "name": "emergency_anaphylaxis",
+      "passed": true,
+      "specialty": "medical.emergency",
+      "model": "medgemma-4b",
+      "blocked": false,
+      "latency_ms": 25.41,
+      "checks": {
+        "blocked": {
+          "passed": true,
+          "detail": "not blocked"
+        },
+        "specialty": {
+          "passed": true,
+          "detail": "matched: medical.emergency"
+        },
+        "tools": {
+          "passed": true,
+          "detail": "no tool check"
+        }
+      }
+    }
+  ],
+  "integration": [
+    {
+      "name": "budget_cheapest_capable",
+      "passed": true,
+      "detail": "model=medgemma-4b"
+    },
+    {
+      "name": "budget_quality_first",
+      "passed": true,
+      "detail": "model=gpt-4o"
+    },
+    {
+      "name": "budget_balanced",
+      "passed": true,
+      "detail": "model=medgemma-4b"
+    },
+    {
+      "name": "budget_performance_weighted",
+      "passed": true,
+      "detail": "model=gpt-4o"
+    },
+    {
+      "name": "cheapest_is_free",
+      "passed": true,
+      "detail": "cost=$0.0"
+    },
+    {
+      "name": "hard_more_complex_than_easy",
+      "passed": true,
+      "detail": "easy=0.287 hard=0.687"
+    },
+    {
+      "name": "custom_reasoning_tokens",
+      "passed": true,
+      "detail": "got=4096"
+    },
+    {
+      "name": "alias_pathologies",
+      "passed": true,
+      "detail": "got=pathology"
+    },
+    {
+      "name": "alias_radiology",
+      "passed": true,
+      "detail": "got=radiology"
+    },
+    {
+      "name": "pathology_has_children",
+      "passed": true,
+      "detail": "children=['surgical', 'cytology', 'dermatopathology', 'hematopathology', 'deep_lesions', 'neuropathology']"
+    },
+    {
+      "name": "xray_maps_radiology",
+      "passed": true,
+      "detail": "got=['medical.radiology']"
+    },
+    {
+      "name": "model_registered",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "model_removed",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "dominant_specialty",
+      "passed": true,
+      "detail": "got=cardiology"
+    },
+    {
+      "name": "specialty_boost",
+      "passed": true,
+      "detail": "boost=0.2"
+    },
+    {
+      "name": "degradation_disables",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "is_disabled",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "prompt_matrix_populated",
+      "passed": true,
+      "detail": "entries=24"
+    },
+    {
+      "name": "tools_available",
+      "passed": true,
+      "detail": "count=5"
+    },
+    {
+      "name": "tool_matching",
+      "passed": true,
+      "detail": "matched=['drug_interaction_check']"
+    },
+    {
+      "name": "sessions_tracked",
+      "passed": true,
+      "detail": ""
+    },
+    {
+      "name": "routing_latency_ok",
+      "passed": true,
+      "detail": "32.0ms"
+    }
+  ]
+}

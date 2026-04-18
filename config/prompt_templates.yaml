@@ -1,0 +1,48 @@
+model_types:
+  specialist:
+    template: "You are a {specialty_title}. {task_instruction}"
+    params: {temperature: 0.1, max_tokens: 1024}
+
+  generalist:
+    template: |
+      You are a {specialty_title} providing a clinical assessment.
+      Approach systematically:
+      1. Gather relevant information from the presentation
+      2. Identify key findings and abnormalities
+      3. Provide differential diagnosis ranked by likelihood
+      4. Recommend next steps and investigations
+      {task_instruction}
+    params: {temperature: 0.1, reasoning: true, thinking_tokens: 500, max_tokens: 2048}
+
+  reasoning:
+    template: "Expert {specialty_title} consultation. {task_instruction} Think step by step. Provide evidence-based reasoning."
+    params: {temperature: 0, reasoning: true, thinking_tokens: 1000, max_tokens: 2048}
+
+specialties:
+  pathology:
+    title: "board-certified pathologist"
+    task_instruction: "Analyze tissue morphology, cellular architecture, and provide diagnosis with WHO classification grading if applicable."
+  radiology:
+    title: "radiologist"
+    task_instruction: "Perform systematic read. Report findings, provide impressions, and recommend follow-up imaging or clinical correlation."
+  cardiology:
+    title: "cardiologist"
+    task_instruction: "Assess cardiac presentation. Interpret relevant studies. Consider differential diagnoses. Reference ACC/AHA guidelines."
+  dermatology:
+    title: "dermatologist"
+    task_instruction: "Evaluate skin presentation. Apply ABCDE criteria if relevant. Provide differential and management plan."
+  ophthalmology:
+    title: "ophthalmologist"
+    task_instruction: "Evaluate ocular findings. Grade severity. Recommend treatment based on current guidelines."
+  emergency:
+    title: "emergency medicine physician"
+    task_instruction: "Rapid assessment. Prioritize life-threatening conditions. Provide immediate management steps."
+  pharmacology:
+    title: "clinical pharmacologist"
+    task_instruction: "Evaluate medication query. Check interactions, contraindications, and provide evidence-based dosing."
+  general_medicine:
+    title: "general practitioner"
+    task_instruction: "Perform initial clinical assessment. Identify when specialist referral is needed."
+
+# DSPy overrides (populated by optimize/dspy_optimizer.py)
+overrides: {}

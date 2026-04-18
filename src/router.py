@@ -1,717 +1,406 @@
-"""Decision engine and model selection.
+"""MedVisionRouter v2 — Two-level routing with specialty taxonomy.
 
-Takes signal results and applies configurable routing rules to select
-the optimal model and inference configuration.  Integrates with the
-dynamic ModelRegistry for capability-based routing and fallback.
+Flow:
+  1. Run all signals in parallel (text, vision, complexity, safety, tools, modality)
+  2. Determine specialty from text + vision signals + taxonomy lookup
+  3. Select model based on specialty, capabilities, budget strategy, and runtime stats
+  4. Build prompt from PromptManager (DSPy > manual > auto)
+  5. Return routing decision with full trace
 
-Supports three rule formats:
-  - Legacy: rules specify ``model`` directly (hardcoded routing).
-  - Budget-aware: rules specify ``require`` (capabilities) + ``strategy``
-    and the router picks the cheapest/best model dynamically.
-  - Embedding-based (vLLM-SR style): decisions define ``exemplars`` and
-    queries are matched via cosine similarity of sentence embeddings.
+Budget strategies:
+  - cheapest_capable: cheapest model that meets all requirements
+  - quality_first: highest quality_score model
+  - balanced: weighted combination of cost, quality, and latency
+  - performance_weighted: use per-specialty accuracy from runtime stats
 """
 
 from __future__ import annotations
 
-import asyncio
-import copy
+import logging
+import time
 import uuid
 from dataclasses import dataclass, field
 from typing import Any, Optional
 
-import numpy as np
-import yaml
+from src.signals import AllSignalsResult, run_all_signals
+from src.taxonomy import SpecialtyTree, resolve_alias
+from src.registry import model_registry, stats_tracker, ModelEntry
+from src.prompts import prompt_manager
+from src.memory import session_store, SessionTrace
 
-try:
-    from src.signals import SignalResult
-except ImportError:
-    from signals import SignalResult
+logger = logging.getLogger(__name__)
 
-try:
-    from sentence_transformers import SentenceTransformer
-except ImportError:
-    raise ImportError(
-        "sentence-transformers is REQUIRED. Install: pip install sentence-transformers"
-    )
-
-
-# ---------------------------------------------------------------------------
-# Data models
-# ---------------------------------------------------------------------------
-
-@dataclass
-class ModelConfig:
-    name: str
-    provider: str
-    cost_per_1k_input: float
-    cost_per_1k_output: float
-    avg_latency_ms: float
-    capabilities: list[str]
-    quality_score: float = 0.7  # 0-1 expected quality rating
+BALANCED_WEIGHTS = {"quality": 0.4, "cost_inv": 0.3, "latency_inv": 0.3}
 
 
 @dataclass
-class BudgetConfig:
-    """Budget constraints for cost-optimised routing."""
-    max_cost_per_query: float = 0.01  # USD hard cap
-    strategy: str = "cheapest_capable"  # default global strategy
-    quality_threshold: float = 0.7
+class RoutingDecision:
+    """Complete routing decision with trace info."""
 
+    trace_id: str = field(default_factory=lambda: str(uuid.uuid4())[:8])
+    model_name: str = ""
+    model_id: str = ""
+    model_type: str = ""
+    specialty: str = ""
+    system_prompt: str = ""
+    prompt_source: str = ""
+    inference_params: dict[str, Any] = field(default_factory=dict)
+    budget_strategy: str = "balanced"
+    estimated_cost: float = 0.0
+    reasoning_tokens: int = 0
+    tools_available: list[str] = field(default_factory=list)
 
-@dataclass
-class RouterDecision:
-    selected_model: str
-    inference_config: dict
-    estimated_cost: float
-    estimated_latency_ms: float
-    reason: str
-    signals_used: dict
-    trace_id: str
+    signals: dict[str, Any] = field(default_factory=dict)
+    routing_latency_ms: float = 0.0
+
     blocked: bool = False
     block_reason: str = ""
-    decision_name: str = ""
-    similarity: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "trace_id": self.trace_id,
+            "model_name": self.model_name,
+            "model_id": self.model_id,
+            "model_type": self.model_type,
+            "specialty": self.specialty,
+            "system_prompt": self.system_prompt[:200],
+            "prompt_source": self.prompt_source,
+            "inference_params": self.inference_params,
+            "budget_strategy": self.budget_strategy,
+            "estimated_cost": round(self.estimated_cost, 6),
+            "reasoning_tokens": self.reasoning_tokens,
+            "tools_available": self.tools_available,
+            "signals": self.signals,
+            "routing_latency_ms": round(self.routing_latency_ms, 2),
+            "blocked": self.blocked,
+            "block_reason": self.block_reason,
+        }
 
 
-# ---------------------------------------------------------------------------
-# DecisionMatcher — vLLM-SR style embedding matching
-# ---------------------------------------------------------------------------
+class MedVisionRouter:
+    """Two-level medical vision router with budget awareness."""
 
-class DecisionMatcher:
-    """Matches queries to decisions using embedding similarity of exemplars."""
+    def __init__(self, budget_strategy: str = "balanced") -> None:
+        self.budget_strategy = budget_strategy
+        self._taxonomy: Optional[SpecialtyTree] = None
+        self._initialized = False
 
-    def __init__(self):
-        self.model: SentenceTransformer | None = None
-        self.decision_embeddings: dict[str, dict] = {}  # name -> {centroid, config}
-        self._loaded = False
+    async def initialize(self) -> None:
+        """Lazy-load taxonomy and models."""
+        if self._initialized:
+            return
+        self._taxonomy = await SpecialtyTree.get_instance()
+        self._initialized = True
+        logger.info("MedVisionRouter initialized")
 
-    def _ensure_model(self):
-        if self.model is None:
-            self.model = SentenceTransformer("all-MiniLM-L6-v2")
+    async def route(
+        self,
+        messages: list[dict],
+        image_data: Optional[str] = None,
+        user_id: Optional[str] = None,
+        budget_strategy: Optional[str] = None,
+        session_id: Optional[str] = None,
+        max_reasoning_tokens: int = 0,
+    ) -> RoutingDecision:
+        """Route a request through the full pipeline."""
+        await self.initialize()
+        t0 = time.perf_counter()
+        strategy = budget_strategy or self.budget_strategy
+        decision = RoutingDecision(budget_strategy=strategy)
 
-    def load_decisions(self, decisions_config: list[dict]):
-        """Pre-compute decision embeddings from exemplars."""
-        self._ensure_model()
-        self.decision_embeddings = {}
-        for decision in decisions_config:
-            name = decision.get("name", "unknown")
-            exemplar_texts = decision.get("exemplars", [])
-            if not exemplar_texts:
-                continue
-            embeddings = self.model.encode(exemplar_texts)
-            centroid = np.mean(embeddings, axis=0)
-            norm = np.linalg.norm(centroid)
-            if norm > 0:
-                centroid = centroid / norm
-            self.decision_embeddings[name] = {
-                "centroid": centroid,
-                "config": decision,
-            }
-        self._loaded = True
-
-    @property
-    def is_loaded(self) -> bool:
-        return self._loaded and len(self.decision_embeddings) > 0
-
-    def match(self, query_text: str) -> tuple[str, float]:
-        """Find best matching decision for a query.
-
-        Always returns highest scoring decision — no threshold cutoff,
-        no default fallback. Embedding match handles ALL queries.
-        """
-        if not self.decision_embeddings or not query_text.strip():
-            # Pick first decision as absolute fallback (shouldn't happen)
-            first = next(iter(self.decision_embeddings), "general")
-            return (first, 0.0)
-
-        self._ensure_model()
-        query_emb = self.model.encode(query_text)
-        norm = np.linalg.norm(query_emb)
-        if norm > 0:
-            query_emb = query_emb / norm
-
-        # Score ALL decisions, apply optional min_similarity as soft preference
-        scores: dict[str, float] = {}
-        all_scores: dict[str, float] = {}
-        for name, data in self.decision_embeddings.items():
-            sim = float(np.dot(query_emb, data["centroid"]))
-            all_scores[name] = sim
-            min_sim = data["config"].get("min_similarity", 0.0)
-            if sim >= min_sim:
-                scores[name] = sim
-
-        # If any decision meets threshold, use it
-        if scores:
-            best = max(scores, key=scores.get)
-            return (best, scores[best])
-
-        # Otherwise pick highest overall (no fallback to "general")
-        best = max(all_scores, key=all_scores.get)
-        return (best, all_scores[best])
-
-
-# ---------------------------------------------------------------------------
-# Router
-# ---------------------------------------------------------------------------
-
-class Router:
-    def __init__(self, config_path: str = "config.yaml"):
-        self.config_path = config_path
-        self.models: dict[str, ModelConfig] = {}
-        self.rules: list[dict] = []
-        self.default_rule: dict = {"model": "gpt-4o-mini", "config": {"temperature": 0.7},
-                                    "reason": "General query, balanced model",
-                                    "require": ["text"], "strategy": "balanced"}
-        self.budget: BudgetConfig = BudgetConfig()
-        self._registry = None  # set via set_registry()
-        self._raw_config: dict = {}  # raw parsed YAML for config API
-
-        # Embedding-based decision matching
-        self.decision_matcher = DecisionMatcher()
-        self.decisions: dict[str, dict] = {}  # name -> decision config
-        self.safety_rules: list[dict] = []
-
-        self.load_config()
-
-    # ------------------------------------------------------------------
-    # Config access helpers (for config API)
-    # ------------------------------------------------------------------
-
-    def get_config(self) -> dict:
-        """Return the full current config as a JSON-serialisable dict."""
-        return copy.deepcopy(self._raw_config)
-
-    def apply_config(self, cfg: dict):
-        """Apply a full configuration dict (same schema as config.yaml)."""
-        self._raw_config = copy.deepcopy(cfg)
-        self._parse_config(cfg)
-
-    def update_budget(self, budget_update: dict):
-        """Merge partial budget updates into the current config."""
-        routing = self._raw_config.setdefault("routing", {})
-        budget_section = routing.setdefault("budget", {})
-        budget_section.update(budget_update)
-        self._parse_config(self._raw_config)
-
-    def update_rules(self, new_rules: list[dict]):
-        """Replace routing rules (but keep models + budget intact)."""
-        routing = self._raw_config.setdefault("routing", {})
-        routing["rules"] = new_rules
-        self._parse_config(self._raw_config)
-
-    def set_registry(self, registry):
-        """Attach a ModelRegistry instance for capability-based routing."""
-        self._registry = registry
-
-    # ------------------------------------------------------------------
-    # Config loading / parsing
-    # ------------------------------------------------------------------
-
-    def load_config(self):
-        """Load or reload configuration from YAML file on disk."""
+        # ── Step 1: Run all signals in parallel ─────────────────────────
         try:
-            with open(self.config_path, "r") as f:
-                cfg = yaml.safe_load(f)
-        except FileNotFoundError:
-            cfg = {"models": [], "routing": {"rules": []}}
-
-        self._raw_config = copy.deepcopy(cfg)
-        self._parse_config(cfg)
-
-    def _parse_config(self, cfg: dict):
-        """Parse a config dict into internal structures."""
-        # --- Models ---
-        self.models = {}
-        for m in cfg.get("models", []):
-            mc = ModelConfig(
-                name=m["name"], provider=m["provider"],
-                cost_per_1k_input=m.get("cost_per_1k_input", 0),
-                cost_per_1k_output=m.get("cost_per_1k_output", 0),
-                avg_latency_ms=m.get("avg_latency_ms", 500),
-                capabilities=m.get("capabilities", []),
-                quality_score=m.get("quality_score", 0.7),
-            )
-            self.models[mc.name] = mc
-
-        # --- Budget ---
-        routing = cfg.get("routing", {})
-        budget_raw = routing.get("budget", {})
-        self.budget = BudgetConfig(
-            max_cost_per_query=budget_raw.get("max_cost_per_query", 0.01),
-            strategy=budget_raw.get("strategy", "cheapest_capable"),
-            quality_threshold=budget_raw.get("quality_threshold", 0.7),
-        )
-
-        # --- Decisions (new: embedding-based) ---
-        decisions_list = routing.get("decisions", [])
-        self.decisions = {}
-        for d in decisions_list:
-            self.decisions[d.get("name", "unknown")] = d
-
-        # Pre-compute decision embeddings if any decisions have exemplars
-        exemplar_decisions = [d for d in decisions_list if d.get("exemplars")]
-        if exemplar_decisions:
-            self.decision_matcher.load_decisions(exemplar_decisions)
-
-        # --- Safety rules (fast keyword-based) ---
-        self.safety_rules = routing.get("safety_rules", [])
-
-        # --- Legacy rules (backward compatible) ---
-        self.rules = []
-        for rule in routing.get("rules", []):
-            if "default" in rule:
-                self.default_rule = rule["default"]
-                # Ensure default has budget-aware fields
-                self.default_rule.setdefault("require", ["text"])
-                self.default_rule.setdefault("strategy", "balanced")
-            else:
-                self.rules.append(rule)
-
-    # ------------------------------------------------------------------
-    # Signal helpers
-    # ------------------------------------------------------------------
-
-    def _signals_dict(self, signals: list[SignalResult]) -> dict[str, SignalResult]:
-        return {s.name: s for s in signals}
-
-    def _estimate_cost(self, model_name: str, input_tokens: int = 500, output_tokens: int = 300) -> float:
-        model = self.models.get(model_name)
-        if not model:
-            return 0.0
-        cost = (input_tokens / 1000) * model.cost_per_1k_input + \
-               (output_tokens / 1000) * model.cost_per_1k_output
-        return round(cost, 6)
-
-    def _estimate_latency(self, model_name: str) -> float:
-        model = self.models.get(model_name)
-        return model.avg_latency_ms if model else 500.0
-
-    def _eval_condition(self, condition: str, sig_map: dict[str, SignalResult]) -> bool:
-        """Evaluate a rule condition string against signal results.
-
-        Supports both legacy format (``safety.score > 0.4``) and the new
-        shorthand format (``safety > 0.7``, ``vision.detected``, etc.).
-        """
-        try:
-            # Build evaluation context
-            ctx: dict[str, Any] = {}
-
-            safety = sig_map.get("safety")
-            if safety:
-                ctx["safety_score"] = safety.score
-                ctx["safety_flagged"] = safety.metadata.get("flagged", False)
-
-            vision = sig_map.get("vision")
-            if vision:
-                ctx["vision_detected"] = vision.metadata.get("detected", False)
-
-            tool = sig_map.get("tool")
-            if tool:
-                ctx["tool_needed"] = tool.metadata.get("needed", False)
-                ctx["tool_score"] = tool.score
-
-            complexity = sig_map.get("complexity")
-            if complexity:
-                ctx["complexity_score"] = complexity.score
-
-            domain = sig_map.get("domain")
-            if domain:
-                ctx["domain_name"] = domain.metadata.get("domain", "general")
-                ctx["domain_score"] = domain.score
-
-            modality = sig_map.get("modality")
-            if modality:
-                ctx["modality"] = modality.metadata.get("modality", "text")
-
-            language = sig_map.get("language")
-            if language:
-                ctx["language"] = language.metadata.get("detected", "en")
-
-            pii = sig_map.get("pii")
-            if pii:
-                ctx["pii_score"] = pii.score
-
-            # Evaluate condition with simple string matching
-            cond = condition
-
-            # New shorthand: "safety > 0.7" -> "safety.score > 0.7"
-            import re
-            cond = re.sub(r'\bsafety\s*([><=!])', r'safety.score \1', cond)
-            cond = re.sub(r'\bcomplexity\s*([><=!])', r'complexity.score \1', cond)
-            cond = re.sub(r'\bpii\s*([><=!])', r'pii.score \1', cond)
-            cond = re.sub(r'\bdomain\s+(in\b|==)', r'domain.name \1', cond)
-
-            # Legacy replacements
-            cond = cond.replace("safety.score", str(ctx.get("safety_score", 0)))
-            cond = cond.replace("vision.detected", str(ctx.get("vision_detected", False)))
-            cond = cond.replace("tool.needed", str(ctx.get("tool_needed", False)))
-            cond = cond.replace("complexity.score", str(ctx.get("complexity_score", 0)))
-            cond = cond.replace("domain.name", repr(ctx.get("domain_name", "general")))
-            cond = cond.replace("pii.score", str(ctx.get("pii_score", 0)))
-
-            return bool(eval(cond, {"__builtins__": {}}, {"true": True, "false": False, "True": True, "False": False}))
-        except Exception:
-            return False
-
-    def _eval_safety_condition(self, condition: str, sig_map: dict[str, SignalResult]) -> bool:
-        """Evaluate a safety rule condition. Same logic as _eval_condition."""
-        return self._eval_condition(condition, sig_map)
-
-    # ------------------------------------------------------------------
-    # Budget-aware model selection
-    # ------------------------------------------------------------------
-
-    def _select_model_by_strategy(
-        self, required_capabilities: list[str], strategy: str
-    ) -> tuple[str | None, dict]:
-        """Pick a model from self.models based on capabilities and strategy.
-
-        Returns (model_name, inference_config) or (None, {}) if no model found.
-        """
-        req_set = set(required_capabilities)
-
-        # Find models that have ALL required capabilities
-        capable: list[ModelConfig] = []
-        for m in self.models.values():
-            model_caps = set(m.capabilities)
-            # Accept models whose capabilities contain the required ones.
-            # Also accept models with "general" as a wildcard for "text".
-            effective_caps = set(model_caps)
-            if "general" in effective_caps or "fast" in effective_caps:
-                effective_caps.add("text")
-            if req_set.issubset(effective_caps):
-                capable.append(m)
-
-        if not capable:
-            # Fallback: return cheapest model regardless of capabilities
-            if self.models:
-                fallback = min(self.models.values(), key=lambda m: m.cost_per_1k_output)
-                return (fallback.name, {})
-            return (None, {})
-
-        # Filter by budget hard cap
-        max_cost = self.budget.max_cost_per_query
-        affordable = [
-            m for m in capable
-            if self._estimate_cost(m.name) <= max_cost
-        ]
-        # If none are affordable, use all capable (don't silently drop)
-        pool = affordable if affordable else capable
-
-        if strategy == "performance_weighted":
-            # Score based on recent runtime performance
-            for model in pool:
-                runtime_stats = None
-                if self._registry and hasattr(self._registry, 'runtime_stats'):
-                    runtime_stats = self._registry.runtime_stats.get(model.name)
-                if runtime_stats and runtime_stats.total_requests > 10:
-                    latency_score = max(0, 1 - runtime_stats.latency_ema / 5000)
-                    accuracy_score = 1 - runtime_stats.error_rate_ema
-                    cost_score = max(0, 1 - model.cost_per_1k_output / 20)
-                    model._runtime_score = accuracy_score * 0.4 + latency_score * 0.3 + cost_score * 0.3
-                else:
-                    model._runtime_score = model.quality_score or 0.5
-            pick = max(pool, key=lambda m: getattr(m, '_runtime_score', 0.5))
-        elif strategy == "cheapest_capable":
-            pick = min(pool, key=lambda m: m.cost_per_1k_output)
-        elif strategy == "quality_first":
-            pick = max(pool, key=lambda m: m.quality_score)
-        elif strategy == "balanced":
-            # Minimise cost/quality ratio
-            pick = min(pool, key=lambda m: m.cost_per_1k_output / max(m.quality_score, 0.1))
-        else:
-            # Unknown strategy -> cheapest
-            pick = min(pool, key=lambda m: m.cost_per_1k_output)
-
-        return (pick.name, {})
-
-    # ------------------------------------------------------------------
-    # Capability helpers (used by registry-aware decide)
-    # ------------------------------------------------------------------
-
-    def _required_capabilities(self, sig_map: dict[str, SignalResult]) -> set[str]:
-        """Derive required model capabilities from signal results."""
-        required: set[str] = set()
-        vision = sig_map.get("vision")
-        if vision and vision.metadata.get("detected"):
-            required.add("vision")
-        tool = sig_map.get("tool")
-        if tool and tool.metadata.get("needed"):
-            required.add("tools")
-        modality = sig_map.get("modality")
-        if modality:
-            mod = modality.metadata.get("modality", "text")
-            if mod == "code_gen":
-                required.add("code")
-        complexity = sig_map.get("complexity")
-        if complexity and complexity.score > 0.7:
-            required.add("reasoning")
-        if not required:
-            required.add("text")
-        return required
-
-    async def _registry_select(self, required_caps: set[str], preferred_model: str | None = None) -> tuple[str | None, str]:
-        """Pick a model from the registry that satisfies required_caps.
-
-        Returns (model_name, selection_reason). Falls back to cheapest capable.
-        """
-        if self._registry is None:
-            return (preferred_model, "no registry attached")
-
-        try:
-            from src.models import ModelCapability
-        except ImportError:
-            from models import ModelCapability
-
-        cap_enums = set()
-        for c in required_caps:
-            try:
-                cap_enums.add(ModelCapability(c))
-            except ValueError:
-                pass
-        if not cap_enums:
-            cap_enums = {ModelCapability.TEXT}
-
-        # If a preferred model is specified, check it first
-        if preferred_model:
-            entry = await self._registry.get_model(preferred_model)
-            if entry and entry.enabled and cap_enums.issubset(entry.capabilities):
-                return (preferred_model, f"preferred model satisfies {required_caps}")
-
-        # Find cheapest capable model
-        cheapest = await self._registry.get_cheapest_capable(cap_enums)
-        if cheapest:
-            return (cheapest.name, f"cheapest model with {required_caps}")
-
-        # Fallback: any enabled model
-        all_models = await self._registry.list_models()
-        enabled = [m for m in all_models if m.enabled]
-        if enabled:
-            pick = min(enabled, key=lambda m: m.cost_per_1k_input)
-            return (pick.name, f"fallback (no model has all of {required_caps})")
-
-        return (preferred_model, "no models in registry, using rule default")
-
-    def decide(self, signals: list[SignalResult], trace_id: Optional[str] = None,
-               query_text: str = "") -> RouterDecision:
-        """Apply routing rules to signal results and return a decision.
-
-        Supports three modes:
-          1. Safety rules (keyword-based, always checked first)
-          2. Embedding-based decisions (if config has ``decisions`` with ``exemplars``)
-          3. Legacy rule-based (if config has ``rules`` with ``if:`` conditions)
-
-        Both embedding-based and legacy rules can coexist. Embedding-based
-        decisions are preferred when available; legacy rules are used as
-        fallback or when no decisions are configured.
-        """
-        if trace_id is None:
-            trace_id = str(uuid.uuid4())
-
-        sig_map = self._signals_dict(signals)
-        signals_summary = {}
-        for s in signals:
-            signals_summary[s.name] = {
-                "score": s.score,
-                "confidence": s.confidence,
-                "time_ms": s.execution_time_ms,
-                "metadata": s.metadata,
-                "skipped": s.skipped,
-            }
-
-        # ---------------------------------------------------------------
-        # 1. Safety rules first (fast keyword-based check)
-        # ---------------------------------------------------------------
-        for rule in self.safety_rules:
-            condition = rule.get("if", "")
-            action = rule.get("action", "")
-            if self._eval_safety_condition(condition, sig_map):
-                if action == "block":
-                    return RouterDecision(
-                        selected_model="BLOCKED",
-                        inference_config={},
-                        estimated_cost=0.0,
-                        estimated_latency_ms=0.0,
-                        reason=rule.get("reason", f"Blocked by safety rule '{rule.get('name', '?')}'"),
-                        signals_used=signals_summary,
-                        trace_id=trace_id,
-                        blocked=True,
-                        block_reason=rule.get("reason", "Safety risk detected"),
-                        decision_name=rule.get("name", "safety_block"),
-                        similarity=0.0,
-                    )
-                # "warn" action: log but don't block — continue routing
-
-        # ---------------------------------------------------------------
-        # 2. Embedding-based decision matching (vLLM-SR style)
-        # ---------------------------------------------------------------
-        if self.decision_matcher.is_loaded and query_text.strip():
-            decision_name, similarity = self.decision_matcher.match(query_text)
-            decision_config = self.decisions.get(decision_name, {})
-
-            if decision_config:
-                required = decision_config.get("require", ["text"])
-                strategy = decision_config.get("strategy", self.budget.strategy)
-
-                # Complexity-aware: only override strategy for pure text decisions
-                # NEVER override requirements — vision/tools/reasoning must be respected
-                complexity_sig = sig_map.get("complexity")
-                complexity_score = complexity_sig.score if complexity_sig else 0.5
-
-                # Only downgrade strategy if decision requires just [text] and query is simple
-                if complexity_score < 0.3 and required == ["text"]:
-                    strategy = "cheapest_capable"
-
-                model_name, _ = self._select_model_by_strategy(required, strategy)
-                if model_name is None:
-                    # No model has exact capabilities — DON'T relax to text-only
-                    # Instead pick cheapest model that has ANY of the required capabilities
-                    req_set = set(required)
-                    partial = [(m, len(set(m.capabilities) & req_set)) for m in self.models.values()]
-                    partial = [(m, overlap) for m, overlap in partial if overlap > 0]
-                    if partial:
-                        # Pick cheapest among models with most capability overlap
-                        max_overlap = max(o for _, o in partial)
-                        best = [m for m, o in partial if o == max_overlap]
-                        model_name = min(best, key=lambda m: m.cost_per_1k_output).name
-                    else:
-                        # Absolute fallback — no overlap at all
-                        cheapest = min(self.models.values(), key=lambda m: m.cost_per_1k_output)
-                        model_name = cheapest.name
-
-                inference_config = dict(decision_config.get("config", {}))
-
-                return RouterDecision(
-                    selected_model=model_name,
-                    inference_config=inference_config,
-                    estimated_cost=self._estimate_cost(model_name),
-                    estimated_latency_ms=self._estimate_latency(model_name),
-                    reason=f"Matched '{decision_name}' (similarity: {similarity:.3f})",
-                    signals_used=signals_summary,
-                    trace_id=trace_id,
-                    decision_name=decision_name,
-                    similarity=round(similarity, 4),
-                )
-
-            # Matched decision name but no config (e.g. 'general' fallback)
-            # Fall through to legacy rules or default
-
-        # ---------------------------------------------------------------
-        # 3. Legacy rule-based matching (backward compatible)
-        # ---------------------------------------------------------------
-        for rule in self.rules:
-            condition = rule.get("if", "")
-            if self._eval_condition(condition, sig_map):
-                # Check if this is a block action
-                if rule.get("action") == "block":
-                    return RouterDecision(
-                        selected_model="BLOCKED",
-                        inference_config={},
-                        estimated_cost=0.0,
-                        estimated_latency_ms=0.0,
-                        reason=rule.get("reason", "Blocked by routing rule"),
-                        signals_used=signals_summary,
-                        trace_id=trace_id,
-                        blocked=True,
-                        block_reason=rule.get("reason", "Safety risk detected"),
-                        decision_name=rule.get("name", "blocked"),
-                        similarity=0.0,
-                    )
-
-                # --- Budget-aware routing (new format) ---
-                if "require" in rule:
-                    required_caps = rule["require"]
-                    strategy = rule.get("strategy", self.budget.strategy)
-                    model_name, config = self._select_model_by_strategy(required_caps, strategy)
-                    if model_name is None:
-                        model_name = self.default_rule.get("model", "gpt-4o-mini")
-                    reason = rule.get("reason",
-                                      f"Rule '{rule.get('name', '?')}': "
-                                      f"require={required_caps} strategy={strategy} -> {model_name}")
-                    return RouterDecision(
-                        selected_model=model_name,
-                        inference_config=rule.get("config", config),
-                        estimated_cost=self._estimate_cost(model_name),
-                        estimated_latency_ms=self._estimate_latency(model_name),
-                        reason=reason,
-                        signals_used=signals_summary,
-                        trace_id=trace_id,
-                        decision_name=rule.get("name", "rule_match"),
-                        similarity=0.0,
-                    )
-
-                # --- Legacy routing (model field) ---
-                model_name = rule.get("model", self.default_rule.get("model", "gpt-4o-mini"))
-                config = rule.get("config", {})
-                return RouterDecision(
-                    selected_model=model_name,
-                    inference_config=config,
-                    estimated_cost=self._estimate_cost(model_name),
-                    estimated_latency_ms=self._estimate_latency(model_name),
-                    reason=rule.get("reason", "Matched routing rule"),
-                    signals_used=signals_summary,
-                    trace_id=trace_id,
-                    decision_name=rule.get("name", "legacy_rule"),
-                    similarity=0.0,
-                )
-
-        # ---------------------------------------------------------------
-        # 4. Default rule -- also supports budget-aware
-        # ---------------------------------------------------------------
-        if "require" in self.default_rule:
-            required_caps = self.default_rule["require"]
-            strategy = self.default_rule.get("strategy", self.budget.strategy)
-            model_name, config = self._select_model_by_strategy(required_caps, strategy)
-            if model_name is None:
-                model_name = self.default_rule.get("model", "gpt-4o-mini")
-            return RouterDecision(
-                selected_model=model_name,
-                inference_config=self.default_rule.get("config", config),
-                estimated_cost=self._estimate_cost(model_name),
-                estimated_latency_ms=self._estimate_latency(model_name),
-                reason=self.default_rule.get("reason", "Default routing (budget-aware)"),
-                signals_used=signals_summary,
-                trace_id=trace_id,
-                decision_name="default",
-                similarity=0.0,
-            )
-
-        model_name = self.default_rule.get("model", "gpt-4o-mini")
-        config = self.default_rule.get("config", {"temperature": 0.7})
-        return RouterDecision(
-            selected_model=model_name,
-            inference_config=config,
-            estimated_cost=self._estimate_cost(model_name),
-            estimated_latency_ms=self._estimate_latency(model_name),
-            reason=self.default_rule.get("reason", "Default routing"),
-            signals_used=signals_summary,
-            trace_id=trace_id,
-            decision_name="default",
-            similarity=0.0,
-        )
-
-    async def decide_with_registry(self, signals: list[SignalResult], trace_id: Optional[str] = None,
-                                    query_text: str = "") -> RouterDecision:
-        """Like decide(), but enhances model selection via the ModelRegistry.
-
-        1. Run normal rule-based decide() to get a candidate.
-        2. Check that the candidate has required capabilities via the registry.
-        3. If not, find a suitable replacement.
-        """
-        decision = self.decide(signals, trace_id, query_text=query_text)
-        if decision.blocked or self._registry is None:
+            signals = await run_all_signals(messages, image_data)
+        except Exception as e:
+            logger.error("Signal pipeline failed: %s", e)
+            decision.blocked = True
+            decision.block_reason = f"Signal error: {e}"
+            decision.routing_latency_ms = (time.perf_counter() - t0) * 1000
             return decision
 
-        sig_map = self._signals_dict(signals)
-        required = self._required_capabilities(sig_map)
-        model_name, reason = await self._registry_select(required, decision.selected_model)
+        decision.signals = self._pack_signals(signals)
 
-        if model_name and model_name != decision.selected_model:
-            # Update decision with registry-selected model
-            decision.selected_model = model_name
-            decision.estimated_cost = self._estimate_cost(model_name)
-            decision.estimated_latency_ms = self._estimate_latency(model_name)
-            decision.reason = f"{decision.reason} [registry: {reason}]"
+        # ── Step 2: Safety gate ──────────────────────────────────────────
+        if not signals.safety.is_safe and signals.safety.risk_score > 0.8:
+            decision.blocked = True
+            decision.block_reason = (
+                f"Safety block: {', '.join(signals.safety.flags)} "
+                f"(score={signals.safety.risk_score:.2f})"
+            )
+            decision.routing_latency_ms = (time.perf_counter() - t0) * 1000
+            return decision
+
+        # ── Step 3: Determine specialty ──────────────────────────────────
+        specialty = await self._resolve_specialty(signals)
+        decision.specialty = specialty
+
+        # ── Step 4: Determine required capabilities ──────────────────────
+        required_caps = self._determine_capabilities(signals, specialty)
+
+        # ── Step 5: Select model by strategy ─────────────────────────────
+        model = self._select_model(required_caps, specialty, strategy)
+        if model is None:
+            model = self._select_model_partial(required_caps, specialty)
+
+        if model is None:
+            all_models = model_registry.list_models()
+            enabled = [m for m in all_models if m.enabled and m.approved]
+            if enabled:
+                model = min(enabled, key=lambda m: m.cost_per_1k_input)
+                logger.warning("No capable model, using fallback: %s", model.name)
+            else:
+                decision.blocked = True
+                decision.block_reason = "No models available"
+                decision.routing_latency_ms = (time.perf_counter() - t0) * 1000
+                return decision
+
+        decision.model_name = model.name
+        decision.model_id = model.model_id
+        decision.model_type = model.type
+
+        # ── Step 6: Get prompt for model x specialty ─────────────────────
+        prompt_result = prompt_manager.get_prompt(
+            model_name=model.name,
+            model_type=model.type,
+            specialty=specialty,
+        )
+        decision.system_prompt = prompt_result.system_prompt
+        decision.prompt_source = prompt_result.source
+        decision.inference_params = dict(prompt_result.params)
+
+        # ── Step 7: Reasoning token budget ───────────────────────────────
+        if max_reasoning_tokens > 0:
+            decision.reasoning_tokens = max_reasoning_tokens
+            decision.inference_params["max_tokens"] = max_reasoning_tokens
+        elif signals.complexity.complexity_score > 0.7 and model.type == "reasoning":
+            decision.reasoning_tokens = 2048
+            decision.inference_params.setdefault("max_tokens", 2048)
+
+        # ── Step 8: Tool awareness ───────────────────────────────────────
+        if signals.tools.needs_tools:
+            decision.tools_available = signals.tools.recommended_tools
+
+        # ── Step 9: Cost estimation ──────────────────────────────────────
+        est_input_tokens = sum(len(str(m.get("content", ""))) // 4 for m in messages)
+        est_output_tokens = decision.inference_params.get("max_tokens", 1024)
+        decision.estimated_cost = (
+            (est_input_tokens / 1000) * model.cost_per_1k_input
+            + (est_output_tokens / 1000) * model.cost_per_1k_output
+        )
+
+        decision.routing_latency_ms = (time.perf_counter() - t0) * 1000
+
+        # ── Step 10: Record trace ────────────────────────────────────────
+        if session_id:
+            trace = SessionTrace(
+                trace_id=decision.trace_id,
+                query_preview=self._extract_query_preview(messages),
+                has_image=signals.modality.has_image,
+                specialty_matched=specialty,
+                specialty_similarity=signals.text.similarity,
+                image_type_detected=signals.vision.image_type,
+                complexity_score=signals.complexity.complexity_score,
+                safety_score=signals.safety.risk_score,
+                tools_suggested=signals.tools.recommended_tools,
+                model_selected=model.name,
+                model_type=model.type,
+                prompt_used=prompt_result.source,
+                reasoning_tokens=decision.reasoning_tokens,
+                cost_estimate=decision.estimated_cost,
+                routing_latency_ms=decision.routing_latency_ms,
+            )
+            session = session_store.get_or_create(session_id, user_id or "")
+            session.add_trace(trace)
 
         return decision
+
+    # ── Internal helpers ─────────────────────────────────────────────────
+
+    async def _resolve_specialty(self, signals: AllSignalsResult) -> str:
+        """Resolve specialty from text and vision signals + taxonomy."""
+        text_specialty = signals.text.matched_specialty
+
+        # If vision detected a specific image type, use taxonomy to find specialty
+        if (
+            signals.vision.image_type not in ("none", "unknown")
+            and signals.vision.similarity_score > 0.3
+            and self._taxonomy
+        ):
+            image_type = signals.vision.image_type
+            image_specialties = self._taxonomy.get_specialties_for_image_type(image_type)
+            if image_specialties:
+                # Prefer specialty that matches both image type and text signal
+                if text_specialty.startswith("medical."):
+                    text_base = text_specialty.split(".")[-1]
+                    for sp in image_specialties:
+                        if text_base in sp.path:
+                            return sp.path
+                return image_specialties[0].path
+
+        # Resolve through taxonomy for dedup
+        if text_specialty.startswith("medical.") and self._taxonomy:
+            parts = text_specialty.split(".")
+            if len(parts) >= 2:
+                resolved = self._taxonomy.resolve(parts[1])
+                if resolved:
+                    return resolved.path
+
+        return text_specialty
+
+    def _determine_capabilities(
+        self, signals: AllSignalsResult, specialty: str
+    ) -> list[str]:
+        """Determine required model capabilities from signals."""
+        caps = ["text"]
+
+        if signals.modality.has_image:
+            caps.append("vision")
+
+        if specialty.startswith("medical."):
+            caps.append("medical")
+
+        if signals.complexity.complexity_score > 0.7:
+            caps.append("reasoning")
+
+        if signals.tools.needs_tools:
+            caps.append("tools")
+
+        return caps
+
+    def _select_model(
+        self,
+        required_caps: list[str],
+        specialty: str,
+        strategy: str,
+    ) -> Optional[ModelEntry]:
+        """Select model using budget strategy."""
+        capable = model_registry.get_capable_models(required_caps)
+
+        # Filter by specialty for medical queries
+        if specialty.startswith("medical."):
+            spec_name = specialty.split(".")[1] if "." in specialty else specialty
+            specialty_models = [
+                m for m in capable
+                if spec_name in m.specialties or "medical" in m.capabilities
+            ]
+            if specialty_models:
+                capable = specialty_models
+
+        # Filter out stats-disabled models
+        capable = [
+            m for m in capable
+            if not (stats_tracker.get_stats(m.name) and stats_tracker.get_stats(m.name).disabled_at)
+        ]
+
+        if not capable:
+            return None
+
+        if strategy == "cheapest_capable":
+            return min(capable, key=lambda m: m.cost_per_1k_input + m.cost_per_1k_output)
+
+        if strategy == "quality_first":
+            return max(capable, key=lambda m: m.quality_score)
+
+        if strategy == "performance_weighted":
+            spec_key = specialty.split(".")[-1] if "." in specialty else specialty
+
+            def perf_score(m: ModelEntry) -> float:
+                s = stats_tracker.get_stats(m.name)
+                if s and spec_key in s.per_specialty_accuracy:
+                    return s.per_specialty_accuracy[spec_key]
+                return m.quality_score
+
+            return max(capable, key=perf_score)
+
+        # balanced (default)
+        def balanced_score(m: ModelEntry) -> float:
+            cost = m.cost_per_1k_input + m.cost_per_1k_output
+            max_cost = max(
+                (c.cost_per_1k_input + c.cost_per_1k_output for c in capable), default=1.0
+            ) or 1.0
+            max_latency = max((c.avg_latency_ms for c in capable), default=1.0) or 1.0
+
+            cost_inv = 1.0 - (cost / max_cost) if max_cost > 0 else 1.0
+            latency_inv = 1.0 - (m.avg_latency_ms / max_latency) if max_latency > 0 else 1.0
+
+            return (
+                BALANCED_WEIGHTS["quality"] * m.quality_score
+                + BALANCED_WEIGHTS["cost_inv"] * cost_inv
+                + BALANCED_WEIGHTS["latency_inv"] * latency_inv
+            )
+
+        return max(capable, key=balanced_score)
+
+    def _select_model_partial(
+        self,
+        required_caps: list[str],
+        specialty: str,
+    ) -> Optional[ModelEntry]:
+        """Fallback: find model with most capability overlap."""
+        all_models = model_registry.list_models()
+        enabled = [m for m in all_models if m.enabled and m.approved]
+        if not enabled:
+            return None
+
+        req_set = set(required_caps)
+        scored = [(len(req_set & set(m.capabilities)), m.quality_score, m) for m in enabled]
+        scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        return scored[0][2]
+
+    def _pack_signals(self, signals: AllSignalsResult) -> dict[str, Any]:
+        """Pack signal results into serializable dict."""
+        return {
+            "text": {
+                "matched_specialty": signals.text.matched_specialty,
+                "similarity": round(signals.text.similarity, 4),
+                "is_medical": signals.text.is_medical,
+                "top_scores": dict(
+                    sorted(signals.text.all_scores.items(), key=lambda x: x[1], reverse=True)[:5]
+                ),
+            },
+            "vision": {
+                "image_type": signals.vision.image_type,
+                "similarity_score": round(signals.vision.similarity_score, 4),
+                "top_scores": dict(
+                    sorted(signals.vision.all_scores.items(), key=lambda x: x[1], reverse=True)[:3]
+                ) if signals.vision.all_scores else {},
+            },
+            "complexity": {
+                "score": round(signals.complexity.complexity_score, 4),
+                "level": signals.complexity.label,
+            },
+            "safety": {
+                "is_safe": signals.safety.is_safe,
+                "risk_score": round(signals.safety.risk_score, 4),
+                "flags": signals.safety.flags,
+            },
+            "tools": {
+                "needs_tools": signals.tools.needs_tools,
+                "recommended": signals.tools.recommended_tools,
+                "top_score": round(signals.tools.top_score, 4),
+            },
+            "modality": {
+                "type": signals.modality.modality,
+                "has_image": signals.modality.has_image,
+                "image_count": signals.modality.image_count,
+            },
+        }
+
+    @staticmethod
+    def _extract_query_preview(messages: list[dict], max_len: int = 100) -> str:
+        """Extract text preview from the last user message."""
+        for msg in reversed(messages):
+            if msg.get("role") != "user":
+                continue
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                return content[:max_len]
+            if isinstance(content, list):
+                for block in content:
+                    if isinstance(block, dict) and block.get("type") == "text":
+                        return block.get("text", "")[:max_len]
+        return ""
+
+
+# Singleton router
+router = MedVisionRouter()

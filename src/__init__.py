@@ -1,1 +1,1 @@
-# Smart Router - Multi-Modal LLM Router
+# MedVisionRouter v2 - Medical Vision Query Router

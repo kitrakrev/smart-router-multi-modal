@@ -1,0 +1,28 @@
+probes:
+  medical:
+    pathology:
+      - q: "What are the histological features of adenocarcinoma?"
+        expected_contains: ["glandular", "mucin", "atypia"]
+      - q: "Describe the difference between benign and malignant tissue."
+        expected_contains: ["invasion", "mitosis", "pleomorphism"]
+    radiology:
+      - q: "What findings on chest X-ray suggest pneumonia?"
+        expected_contains: ["consolidation", "infiltrate", "air bronchogram"]
+      - q: "Describe signs of pneumothorax on X-ray."
+        expected_contains: ["lucency", "lung marking", "pleural line"]
+    cardiology:
+      - q: "What ECG changes indicate acute MI?"
+        expected_contains: ["ST elevation", "Q wave", "T wave"]
+    dermatology:
+      - q: "What are the ABCDE criteria for melanoma?"
+        expected_contains: ["asymmetry", "border", "color", "diameter", "evolution"]
+  vision:
+    - q: "Describe what you see in this image"
+      type: vision_test
+  general:
+    code:
+      - q: "Write a Python function to reverse a string"
+        expected_contains: ["def ", "return"]
+    reasoning:
+      - q: "If all A are B, and all B are C, are all A C? Explain."
+        expected_contains: ["yes", "transitive"]

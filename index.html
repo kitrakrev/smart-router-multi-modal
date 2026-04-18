@@ -389,6 +389,7 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
   <div class="nav-tab" data-tab="models" onclick="switchTab('models')">Models</div>
   <div class="nav-tab" data-tab="stats" onclick="switchTab('stats')">Stats</div>
   <div class="nav-tab" data-tab="sessions" onclick="switchTab('sessions')">Sessions</div>
+  <div class="nav-tab" data-tab="config" onclick="switchTab('config');loadConfigTab()">Config</div>
 </div>
 
 <!-- ======================== ALERT BANNER ======================== -->
@@ -579,6 +580,37 @@ input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent)}
     <div class="session-main" id="session-main">
       <div class="session-empty" id="session-empty">Select a session to view its trace timeline</div>
       <div id="session-detail" style="display:none"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ======================== TAB 6: CONFIG ======================== -->
+<div class="tab-content" id="tab-config">
+  <div style="padding:24px;overflow-y:auto;height:100%">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:1400px">
+
+      <!-- Decisions -->
+      <div>
+        <h3 style="margin-bottom:16px;color:var(--accent)">Decisions (<span id="cfg-decision-count">0</span>)</h3>
+        <div id="cfg-decisions" style="display:flex;flex-direction:column;gap:12px"></div>
+      </div>
+
+      <!-- Models + Budget -->
+      <div>
+        <h3 style="margin-bottom:16px;color:var(--accent)">Budget</h3>
+        <div id="cfg-budget" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:24px;font-family:var(--mono);font-size:13px"></div>
+
+        <h3 style="margin-bottom:16px;color:var(--accent)">Models (<span id="cfg-model-count">0</span>)</h3>
+        <div id="cfg-models" style="display:flex;flex-direction:column;gap:8px"></div>
+
+        <h3 style="margin:24px 0 16px;color:var(--accent)">Safety Rules</h3>
+        <div id="cfg-safety" style="display:flex;flex-direction:column;gap:8px"></div>
+
+        <div style="margin-top:24px">
+          <button onclick="reloadConfig()" style="background:var(--accent);color:#000;border:none;padding:8px 20px;border-radius:6px;font-weight:600">Reload from File</button>
+        </div>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1747,6 +1779,83 @@ async function reloadConfigFromFile() {
       alert('Failed: ' + (e.detail || JSON.stringify(e)));
     }
   } catch(e) { alert('Failed: ' + e); }
+}
+
+/* ================================================================== */
+/*  TAB 6: CONFIG                                                     */
+/* ================================================================== */
+async function loadConfigTab() {
+  try {
+    const r = await fetch(`${API_BASE}/v1/config`);
+    if (!r.ok) return;
+    const cfg = await r.json();
+
+    // Decisions
+    const decisions = cfg.routing?.decisions || [];
+    $('#cfg-decision-count').textContent = decisions.length;
+    $('#cfg-decisions').innerHTML = decisions.map(d => {
+      const exemplars = (d.exemplars||[]).map(e => `<div style="color:var(--text2);font-size:11px;padding:2px 0">• ${escHtml(e)}</div>`).join('');
+      const req = (d.require||[]).map(r => `<span style="background:rgba(56,189,248,.15);color:var(--accent);padding:1px 6px;border-radius:3px;font-size:11px;margin-right:4px">${r}</span>`).join('');
+      const cfgStr = d.config ? Object.entries(d.config).map(([k,v]) => `<span style="color:var(--green)">${k}=${v}</span>`).join(' ') : '';
+      return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:14px">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <span style="color:var(--accent2);font-weight:700;font-size:14px">${escHtml(d.name)}</span>
+          <span style="color:var(--text2);font-size:11px">${d.strategy||'cheapest_capable'}</span>
+        </div>
+        <div style="margin:6px 0">${req}</div>
+        <div style="font-family:var(--mono);font-size:11px;margin:4px 0">${cfgStr}</div>
+        <details style="margin-top:6px"><summary style="color:var(--text2);font-size:12px;cursor:pointer">${(d.exemplars||[]).length} exemplars</summary>${exemplars}</details>
+      </div>`;
+    }).join('');
+
+    // Budget
+    const budget = cfg.routing?.budget || {};
+    $('#cfg-budget').innerHTML = `
+      <div><span style="color:var(--text2)">strategy: </span><span style="color:var(--green);font-weight:600">${budget.strategy||'cheapest_capable'}</span></div>
+      <div><span style="color:var(--text2)">max_cost_per_query: </span><span style="color:var(--orange)">$${budget.max_cost_per_query||0.01}</span></div>
+      <div><span style="color:var(--text2)">quality_threshold: </span><span>${budget.quality_threshold||0.7}</span></div>`;
+
+    // Models
+    const models = cfg.models || [];
+    $('#cfg-model-count').textContent = models.length;
+    $('#cfg-models').innerHTML = models.map(m => {
+      const caps = (m.capabilities||[]).map(c => {
+        const colors = {vision:'var(--pink)',tools:'var(--orange)',reasoning:'var(--purple)',code:'var(--green)',text:'var(--text2)',general:'var(--text2)',fast:'var(--accent)'};
+        return `<span style="background:rgba(255,255,255,.05);color:${colors[c]||'var(--text2)'};padding:1px 5px;border-radius:3px;font-size:10px;margin-right:3px">${c}</span>`;
+      }).join('');
+      return `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:10px;display:flex;justify-content:space-between;align-items:center">
+        <div>
+          <span style="font-weight:600">${escHtml(m.name)}</span>
+          <span style="color:var(--text2);font-size:11px;margin-left:8px">${m.provider||''}</span>
+          <div style="margin-top:4px">${caps}</div>
+        </div>
+        <div style="text-align:right;font-family:var(--mono);font-size:11px">
+          <div style="color:var(--orange)">$${m.cost_per_1k_output||0}/1K out</div>
+          <div style="color:var(--text2)">${m.avg_latency_ms||0}ms</div>
+          <div style="color:var(--accent)">q=${m.quality_score||'?'}</div>
+        </div>
+      </div>`;
+    }).join('');
+
+    // Safety rules
+    const safety = cfg.routing?.safety_rules || [];
+    $('#cfg-safety').innerHTML = safety.length ? safety.map(r =>
+      `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:6px;padding:8px;font-family:var(--mono);font-size:12px">
+        <span style="color:var(--red);font-weight:600">${r.name||'rule'}</span>
+        <span style="color:var(--text2)"> if </span><span style="color:var(--orange)">${r.if||''}</span>
+        <span style="color:var(--text2)"> → </span><span style="color:var(--red)">${r.action||''}</span>
+      </div>`
+    ).join('') : '<div style="color:var(--text2);font-size:13px">No safety rules configured</div>';
+
+  } catch(e) { console.error('Config load failed:', e); }
+}
+
+async function reloadConfig() {
+  try {
+    const r = await fetch(`${API_BASE}/v1/config/reload`, {method:'POST'});
+    if (r.ok) { loadConfigTab(); alert('Config reloaded'); }
+    else alert('Failed');
+  } catch(e) { alert('Failed: '+e); }
 }
 
 /* ================================================================== */

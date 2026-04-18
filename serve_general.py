@@ -94,13 +94,20 @@ def generate(model_info: dict, messages: List[ChatMessage], max_tokens: int, tem
         p.get("text", "") for p in m.content if isinstance(p, dict) and p.get("type") == "text"
     ) if isinstance(m.content, list) else str(m.content)} for m in messages]
 
+    # Get the text tokenizer (processor wraps tokenizer + image_processor)
+    text_tok = getattr(tokenizer, "tokenizer", tokenizer)
+
     try:
-        prompt = tokenizer.apply_chat_template(text_messages, tokenize=False, add_generation_prompt=True)
+        template_fn = getattr(text_tok, "apply_chat_template", None) or getattr(tokenizer, "apply_chat_template", None)
+        prompt = template_fn(text_messages, tokenize=False, add_generation_prompt=True)
     except Exception:
         prompt = "\n".join(f"{m['role']}: {m['content']}" for m in text_messages) + "\nassistant: "
 
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=4096)
+    # Use text tokenizer for encoding (not processor which tries to parse images)
+    inputs = text_tok(prompt, return_tensors="pt", truncation=True, max_length=4096)
     inputs = {k: v.to(DEVICE) for k, v in inputs.items() if isinstance(v, torch.Tensor)}
+
+    pad_id = getattr(text_tok, "pad_token_id", None) or getattr(text_tok, "eos_token_id", 0)
 
     t0 = time.time()
     with torch.no_grad():
@@ -110,12 +117,12 @@ def generate(model_info: dict, messages: List[ChatMessage], max_tokens: int, tem
             temperature=max(temperature, 0.01),
             top_p=top_p,
             do_sample=temperature > 0.01,
-            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id or 0,
+            pad_token_id=pad_id or 0,
         )
 
     input_len = inputs["input_ids"].shape[1]
     generated = outputs[0][input_len:]
-    response_text = tokenizer.decode(generated, skip_special_tokens=True).strip()
+    response_text = text_tok.decode(generated, skip_special_tokens=True).strip()
     elapsed = time.time() - t0
 
     print(f"[INFO] Generated {len(generated)} tokens in {elapsed:.2f}s ({len(generated)/max(elapsed,0.001):.1f} tok/s)")

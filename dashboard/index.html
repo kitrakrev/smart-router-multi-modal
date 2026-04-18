@@ -615,6 +615,7 @@ document.querySelectorAll('.tab').forEach(tab => {
     if (tab.dataset.tab === 'prompts') loadPrompts();
     if (tab.dataset.tab === 'sessions') loadSessions();
     if (tab.dataset.tab === 'pipeline') drawPipeline();
+    if (tab.dataset.tab === 'chat') chatRenderSidebar();
   });
 });
 
@@ -1598,6 +1599,280 @@ async function loadSessionTraces(sessionId) {
     });
     el.innerHTML = html;
   } catch(e) { console.error('Session traces error:', e); }
+}
+
+// ----------------------------------------------------------------
+// Chat Tab (Tab 7)
+// ----------------------------------------------------------------
+var chatState = {
+  sessions: {},       // sessionId -> { messages: [{role,content,routing}], meta: {} }
+  activeSession: null,
+  imageBase64: null,
+};
+
+function chatNewSession() {
+  var id = 'chat-' + Math.random().toString(36).slice(2, 10);
+  chatState.sessions[id] = { messages: [], meta: { created: Date.now(), lastSpecialty: '-', queryCount: 0 } };
+  chatState.activeSession = id;
+  chatRenderSidebar();
+  chatRenderMessages();
+}
+
+function chatSelectSession(id) {
+  chatState.activeSession = id;
+  chatRenderSidebar();
+  chatRenderMessages();
+}
+
+function chatRenderSidebar() {
+  var el = document.getElementById('chat-session-list');
+  var ids = Object.keys(chatState.sessions).sort(function(a,b) {
+    return (chatState.sessions[b].meta.created || 0) - (chatState.sessions[a].meta.created || 0);
+  });
+
+  // Also load server sessions
+  fetch(API + '/v1/sessions').then(function(r){return r.json();}).then(function(data) {
+    var serverHtml = '';
+    (data.sessions || []).forEach(function(s) {
+      if (chatState.sessions[s.session_id]) return; // skip if already local
+      var timeStr = s.last_active ? new Date(s.last_active * 1000).toLocaleTimeString() : '';
+      var dist = s.specialty_distribution || {};
+      var topSpec = '-';
+      var maxC = 0;
+      for (var k in dist) { if (dist[k] > maxC) { maxC = dist[k]; topSpec = k; } }
+      serverHtml += '<div class="chat-session-item" onclick="chatLoadServerSession(\'' + s.session_id + '\')">' +
+        '<div style="overflow:hidden;text-overflow:ellipsis;">' +
+          '<div>' + s.session_id + '</div>' +
+          '<div class="chat-session-meta"><span>' + s.trace_count + ' queries</span><span>' + topSpec + '</span></div>' +
+        '</div>' +
+        '<span style="font-size:10px;color:var(--text2)">' + timeStr + '</span>' +
+      '</div>';
+    });
+    // append server sessions after local ones
+    var localHtml = '';
+    ids.forEach(function(id) {
+      var s = chatState.sessions[id];
+      var active = id === chatState.activeSession ? ' active' : '';
+      var timeStr = s.meta.created ? new Date(s.meta.created).toLocaleTimeString() : '';
+      localHtml += '<div class="chat-session-item' + active + '" onclick="chatSelectSession(\'' + id + '\')">' +
+        '<div style="overflow:hidden;text-overflow:ellipsis;">' +
+          '<div>' + id + '</div>' +
+          '<div class="chat-session-meta"><span>' + s.meta.queryCount + ' queries</span><span>' + (s.meta.lastSpecialty || '-') + '</span></div>' +
+        '</div>' +
+        '<span style="font-size:10px;color:var(--text2)">' + timeStr + '</span>' +
+      '</div>';
+    });
+    el.innerHTML = localHtml + serverHtml;
+  }).catch(function() {
+    var html = '';
+    ids.forEach(function(id) {
+      var s = chatState.sessions[id];
+      var active = id === chatState.activeSession ? ' active' : '';
+      var timeStr = s.meta.created ? new Date(s.meta.created).toLocaleTimeString() : '';
+      html += '<div class="chat-session-item' + active + '" onclick="chatSelectSession(\'' + id + '\')">' +
+        '<div style="overflow:hidden;text-overflow:ellipsis;">' +
+          '<div>' + id + '</div>' +
+          '<div class="chat-session-meta"><span>' + s.meta.queryCount + ' queries</span><span>' + (s.meta.lastSpecialty || '-') + '</span></div>' +
+        '</div>' +
+        '<span style="font-size:10px;color:var(--text2)">' + timeStr + '</span>' +
+      '</div>';
+    });
+    el.innerHTML = html;
+  });
+}
+
+function chatLoadServerSession(sessionId) {
+  // Load traces from server session and convert to chat messages
+  fetch(API + '/v1/sessions/' + sessionId + '/traces').then(function(r){return r.json();}).then(function(data) {
+    var msgs = [];
+    (data.traces || []).forEach(function(t) {
+      msgs.push({ role: 'user', content: t.query_preview });
+      msgs.push({
+        role: 'assistant',
+        content: '[Previously routed to ' + t.model_selected + ']',
+        routing: {
+          specialty_matched: t.specialty_matched,
+          model_selected: t.model_selected,
+          total_latency_ms: t.total_latency_ms,
+          cost_estimate: t.cost_estimate,
+          complexity_score: t.complexity_score,
+        }
+      });
+    });
+    var topSpec = '-';
+    if (data.traces && data.traces.length) topSpec = data.traces[data.traces.length-1].specialty_matched || '-';
+    chatState.sessions[sessionId] = {
+      messages: msgs,
+      meta: { created: Date.now(), lastSpecialty: topSpec, queryCount: (data.traces || []).length }
+    };
+    chatState.activeSession = sessionId;
+    chatRenderSidebar();
+    chatRenderMessages();
+  }).catch(function(e) { console.error('Failed to load session:', e); });
+}
+
+function chatRenderMessages() {
+  var el = document.getElementById('chat-messages');
+  var sid = chatState.activeSession;
+  if (!sid || !chatState.sessions[sid]) {
+    el.innerHTML = '<div style="margin:auto;color:var(--text2);font-size:13px;text-align:center;">Start a new session or select one from the sidebar.</div>';
+    return;
+  }
+  var msgs = chatState.sessions[sid].messages;
+  if (!msgs.length) {
+    el.innerHTML = '<div style="margin:auto;color:var(--text2);font-size:13px;text-align:center;">No messages yet. Type below to start.</div>';
+    return;
+  }
+  var html = '';
+  msgs.forEach(function(m, idx) {
+    if (m.role === 'user') {
+      html += '<div class="chat-msg user">' + escHtml(m.content) + '</div>';
+    } else {
+      var whyId = 'chat-why-' + sid + '-' + idx;
+      var metaHtml = '';
+      if (m.routing) {
+        var r = m.routing;
+        metaHtml = '<div class="chat-msg-meta">' +
+          '<span class="specialty-tag">' + (r.specialty_matched || '-') + '</span>' +
+          '<span>' + (r.model_selected || '-') + '</span>' +
+          '<span>' + (r.total_latency_ms ? r.total_latency_ms.toFixed(0) + 'ms' : '-') + '</span>' +
+          '<span>' + (r.cost_estimate != null ? '$' + r.cost_estimate.toFixed(4) : '-') + '</span>' +
+          '<span class="chat-msg-why" onclick="chatToggleWhy(\'' + whyId + '\')">Why?</span>' +
+        '</div>' +
+        '<div class="chat-msg-explain" id="' + whyId + '">' +
+          'Specialty: ' + (r.specialty_matched || '-') + '\\n' +
+          'Model: ' + (r.model_selected || '-') + ' (' + (r.model_type || '-') + ')\\n' +
+          'Complexity: ' + (r.complexity_score != null ? r.complexity_score.toFixed(2) : '-') + '\\n' +
+          'Safety: ' + (r.safety_score != null ? r.safety_score.toFixed(2) : '-') + '\\n' +
+          'Similarity: ' + (r.specialty_similarity != null ? r.specialty_similarity.toFixed(2) : '-') + '\\n' +
+          'Image type: ' + (r.image_type_detected || 'none') + '\\n' +
+          'Prompt source: ' + (r.prompt_source || '-') + '\\n' +
+          'Reasoning tokens: ' + (r.reasoning_tokens || 0) +
+        '</div>';
+      }
+      html += '<div class="chat-msg assistant">' + escHtml(m.content) + metaHtml + '</div>';
+    }
+  });
+  el.innerHTML = html;
+  // Scroll to bottom
+  el.scrollTop = el.scrollHeight;
+}
+
+function chatToggleWhy(id) {
+  var el = document.getElementById(id);
+  if (el) el.classList.toggle('open');
+}
+
+// Image upload for chat
+(function() {
+  var imgInput = document.getElementById('chat-img-input');
+  if (imgInput) {
+    imgInput.addEventListener('change', function(e) {
+      if (e.target.files.length) {
+        var reader = new FileReader();
+        reader.onload = function() {
+          chatState.imageBase64 = reader.result.split(',')[1];
+          document.getElementById('chat-img-btn').classList.add('has-img');
+          document.getElementById('chat-img-btn').title = e.target.files[0].name;
+        };
+        reader.readAsDataURL(e.target.files[0]);
+      }
+    });
+  }
+})();
+
+// Auto-resize chat input
+(function() {
+  var chatInput = document.getElementById('chat-input');
+  if (chatInput) {
+    chatInput.addEventListener('input', function() {
+      this.style.height = 'auto';
+      this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+    });
+    chatInput.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); chatSend(); }
+    });
+  }
+})();
+
+async function chatSend() {
+  var input = document.getElementById('chat-input');
+  var text = input.value.trim();
+  if (!text) return;
+  if (!chatState.activeSession) chatNewSession();
+
+  var sid = chatState.activeSession;
+  var session = chatState.sessions[sid];
+
+  // Add user message
+  session.messages.push({ role: 'user', content: text });
+  session.meta.queryCount++;
+  input.value = '';
+  input.style.height = 'auto';
+  chatRenderMessages();
+
+  // Build messages array for API
+  var apiMessages = session.messages.filter(function(m) {
+    return m.role === 'user' || (m.role === 'assistant' && !m.content.startsWith('[Previously routed'));
+  }).map(function(m) {
+    return { role: m.role, content: m.content };
+  });
+
+  // Handle image in last user message
+  if (chatState.imageBase64) {
+    var lastMsg = apiMessages[apiMessages.length - 1];
+    lastMsg.content = [
+      { type: 'text', text: lastMsg.content },
+      { type: 'image_url', image_url: { url: 'data:image/png;base64,' + chatState.imageBase64 } }
+    ];
+  }
+
+  var budget = document.getElementById('chat-budget').value || undefined;
+  var sendBtn = document.getElementById('chat-send-btn');
+  sendBtn.disabled = true;
+  sendBtn.textContent = '...';
+
+  try {
+    var body = {
+      messages: apiMessages,
+      session_id: sid,
+      user: 'dashboard-chat',
+    };
+    if (budget) body.budget_strategy = budget;
+
+    var resp = await fetch(API + '/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    var data = await resp.json();
+
+    var assistantText = '';
+    var routing = data.routing || {};
+    if (data.choices && data.choices.length) {
+      assistantText = data.choices[0].message.content || '';
+    }
+
+    session.messages.push({
+      role: 'assistant',
+      content: assistantText,
+      routing: routing,
+    });
+
+    session.meta.lastSpecialty = routing.specialty_matched || session.meta.lastSpecialty;
+  } catch(e) {
+    session.messages.push({ role: 'assistant', content: '[Error: ' + e.message + ']', routing: null });
+  }
+
+  // Reset image
+  chatState.imageBase64 = null;
+  document.getElementById('chat-img-btn').classList.remove('has-img');
+  document.getElementById('chat-img-btn').title = 'Attach image';
+
+  sendBtn.disabled = false;
+  sendBtn.textContent = 'Send';
+  chatRenderSidebar();
+  chatRenderMessages();
 }
 
 // ----------------------------------------------------------------

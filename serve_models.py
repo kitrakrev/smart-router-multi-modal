@@ -77,20 +77,25 @@ class ChatCompletionResponse(BaseModel):
 
 def load_llava_med():
     """Load LLaVA-Med-7B — medical vision specialist (pathology + radiology)."""
-    from transformers import AutoProcessor, LlavaForConditionalGeneration
+    from transformers import AutoProcessor, LlavaForConditionalGeneration, AutoConfig
     model_id = "microsoft/llava-med-v1.5-mistral-7b"
     print(f"[INFO] Loading {model_id}...")
     start = time.time()
 
     processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
+    # llava_mistral arch → use LlavaForConditionalGeneration with config override
     try:
+        config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
+        config.model_type = "llava"
         model = LlavaForConditionalGeneration.from_pretrained(
             model_id,
+            config=config,
             torch_dtype=torch.float16,
             device_map="auto",
             trust_remote_code=True,
         )
-    except Exception:
+    except Exception as e:
+        print(f"[WARN] LlavaForConditionalGeneration failed: {e}, trying AutoModel")
         model = AutoModelForCausalLM.from_pretrained(
             model_id,
             torch_dtype=torch.float16,

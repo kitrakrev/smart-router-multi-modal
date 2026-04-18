@@ -489,7 +489,7 @@ def generate_config(
 
     # Write to file
     if output_dir is None:
-        output_dir = str(Path(__file__).parent / "configs")
+        output_dir = str(Path(__file__).parent.parent / "config" / "generated")
     os.makedirs(output_dir, exist_ok=True)
 
     # Normalize filename

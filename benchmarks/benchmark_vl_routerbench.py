@@ -32,18 +32,18 @@ from pathlib import Path
 
 import numpy as np
 
-# Ensure we can import from router-prototype
-sys.path.insert(0, str(Path(__file__).parent))
+# Ensure we can import from project root
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from signals import run_all_signals, SignalResult
-from router import Router
-from generate_benchmark_config import generate_config
+from src.signals import run_all_signals, SignalResult
+from src.router import Router
+from benchmarks.generate_benchmark_config import generate_config
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-DATASET_DIR = Path(__file__).parent / "benchmarks" / "vl_routerbench"
+DATASET_DIR = Path(__file__).parent.parent / "benchmarks" / "vl_routerbench"
 
 # VLM pool: maps our router's model names to VL-RouterBench model indices
 # Our router picks from {gpt-4o, claude-sonnet, gpt-4o-mini, qwen-3b-local}
@@ -708,7 +708,7 @@ async def run_benchmark():
         },
     }
 
-    output_path = Path(__file__).parent / "benchmarks" / "vl_benchmark_results.json"
+    output_path = Path(__file__).parent / "results" / "vl_routerbench.json"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     def _json_default(obj):

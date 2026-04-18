@@ -1,0 +1,47 @@
+{
+  "benchmark": "RouterArena",
+  "config": "config_routerarena.yaml",
+  "total_queries": 8400,
+  "blocked": 0,
+  "evaluated": 8400,
+  "routing_accuracy": 0.981,
+  "overlap_accuracy": 0.8072,
+  "gptonly_accuracy": 0.9995,
+  "optimal_selection_rate": 0.981,
+  "cost_per_1k_router": 254.9595,
+  "cost_per_1k_baseline": 255.0,
+  "cost_ratio": 0.9998,
+  "avg_latency_ms": 27.57,
+  "p50_latency_ms": 24.47,
+  "p99_latency_ms": 75.05,
+  "model_distribution": {
+    "gpt-4o-mini": 8396,
+    "gemini-2.0-flash-001": 4
+  },
+  "decision_distribution": {
+    "general": 8396,
+    "code_generation": 2,
+    "creative_writing": 2
+  },
+  "avg_similarity": 0.2767,
+  "metric_distribution": {
+    "math_metric": 280,
+    "mcq_accuracy": 5844,
+    "chess_accuracy": 148,
+    "exact_match": 689,
+    "code_accuracy": 385,
+    "meteor_score": 640,
+    "superglue_clozetest": 59,
+    "superglue_exact_match": 355
+  },
+  "gt_score_by_model": {
+    "gpt-4o-mini": {
+      "avg_score": 0.5921,
+      "count": 8396
+    },
+    "gemini-2.0-flash-001": {
+      "avg_score": 0.0,
+      "count": 4
+    }
+  }
+}

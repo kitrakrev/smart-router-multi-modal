@@ -25,12 +25,20 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
-from signals import run_all_signals, SignalResult
-from router import Router, RouterDecision
-from tracer import trace_store, RequestTrace
-from tools import ToolExecutor
-from models_api import models_router
-from models import model_registry
+try:
+    from src.signals import run_all_signals, SignalResult
+    from src.router import Router, RouterDecision
+    from src.tracer import trace_store, RequestTrace
+    from src.tools import ToolExecutor
+    from src.models_api import models_router
+    from src.models import model_registry
+except ImportError:
+    from signals import run_all_signals, SignalResult
+    from router import Router, RouterDecision
+    from tracer import trace_store, RequestTrace
+    from tools import ToolExecutor
+    from models_api import models_router
+    from models import model_registry
 
 # ---------------------------------------------------------------------------
 # App setup
@@ -49,7 +57,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-router_engine = Router(config_path=str(Path(__file__).parent / "config.yaml"))
+_config_candidates = [
+    Path(__file__).parent.parent / "config" / "config.yaml",   # new layout
+    Path(__file__).parent / "config.yaml",                      # legacy flat layout
+]
+_config_path = str(next((p for p in _config_candidates if p.exists()), _config_candidates[0]))
+router_engine = Router(config_path=_config_path)
 router_engine.set_registry(model_registry)
 trace_store.set_registry(model_registry)
 app.include_router(models_router)
@@ -321,7 +334,11 @@ async def ws_traces(ws: WebSocket):
 
 @app.get("/dashboard", response_class=HTMLResponse)
 async def dashboard():
-    html_path = Path(__file__).parent / "index.html"
+    _dashboard_candidates = [
+        Path(__file__).parent.parent / "dashboard" / "index.html",  # new layout
+        Path(__file__).parent / "index.html",                        # legacy flat layout
+    ]
+    html_path = next((p for p in _dashboard_candidates if p.exists()), _dashboard_candidates[0])
     return HTMLResponse(content=html_path.read_text(), status_code=200)
 
 

@@ -23,7 +23,10 @@ from typing import Any, Optional
 import numpy as np
 import yaml
 
-from signals import SignalResult
+try:
+    from src.signals import SignalResult
+except ImportError:
+    from signals import SignalResult
 
 try:
     from sentence_transformers import SentenceTransformer
@@ -456,7 +459,10 @@ class Router:
         if self._registry is None:
             return (preferred_model, "no registry attached")
 
-        from models import ModelCapability
+        try:
+            from src.models import ModelCapability
+        except ImportError:
+            from models import ModelCapability
 
         cap_enums = set()
         for c in required_caps:

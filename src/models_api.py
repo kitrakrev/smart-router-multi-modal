@@ -11,7 +11,10 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
 
-from models import model_registry, ModelEntry, ModelCapability, _parse_capabilities
+try:
+    from src.models import model_registry, ModelEntry, ModelCapability, _parse_capabilities
+except ImportError:
+    from models import model_registry, ModelEntry, ModelCapability, _parse_capabilities
 
 models_router = APIRouter(prefix="/v1/models", tags=["models"])
 

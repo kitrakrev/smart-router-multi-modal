@@ -49,7 +49,7 @@ from sklearn.model_selection import train_test_split
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-MODEL_DIR = Path(__file__).parent / "models" / "lmsys-task-classifier"
+MODEL_DIR = Path(__file__).parent.parent / "models" / "lmsys-task-classifier"
 ENCODER_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 # Task type labels

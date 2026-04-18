@@ -5,6 +5,6 @@ models/
 benchmarks/vl_routerbench/
 *.egg-info/
 .uv/
-benchmark_results.json
-.venv/
-models/
+.DS_Store
+~$*
+*.tmp

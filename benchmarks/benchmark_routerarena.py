@@ -27,11 +27,11 @@ import time
 from collections import Counter, defaultdict
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from signals import run_all_signals
-from router import Router
-from generate_benchmark_config import generate_config
+from src.signals import run_all_signals
+from src.router import Router
+from benchmarks.generate_benchmark_config import generate_config
 
 
 # ---------------------------------------------------------------------------
@@ -401,7 +401,7 @@ async def benchmark():
         },
     }
 
-    output_path = Path(__file__).parent / "benchmark_results.json"
+    output_path = Path(__file__).parent / "results" / "routerarena.json"
     with open(output_path, "w") as f:
         json.dump(results, f, indent=2)
     print(f"\nResults saved to: {output_path}")

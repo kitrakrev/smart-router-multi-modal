@@ -34,7 +34,7 @@ import torch
 TASK_TYPES = ["qa", "code", "math", "creative", "translation", "reasoning", "chat"]
 COST_LABELS = ["low", "medium", "high"]
 
-MODEL_DIR = Path(__file__).parent / "models" / "lmsys-task-classifier"
+MODEL_DIR = Path(__file__).parent.parent / "models" / "lmsys-task-classifier"
 ENCODER_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 
 

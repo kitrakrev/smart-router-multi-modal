@@ -17,8 +17,12 @@ from typing import Any, Optional
 
 from fastapi import WebSocket
 
-from signals import SignalResult
-from router import RouterDecision
+try:
+    from src.signals import SignalResult
+    from src.router import RouterDecision
+except ImportError:
+    from signals import SignalResult
+    from router import RouterDecision
 
 
 # ---------------------------------------------------------------------------

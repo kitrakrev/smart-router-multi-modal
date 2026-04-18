@@ -26,14 +26,26 @@ models:
     avg_latency_ms: 450
     quality_score: 0.90
 
-  - name: llava-1.6-7b
-    type: general-vision
+  - name: qwen2.5-7b
+    type: general-text
     provider: a100
-    model_id: llava-hf/llava-v1.6-mistral-7b-hf
+    model_id: Qwen/Qwen2.5-7B-Instruct
     api_base: "http://localhost:8002"
-    capabilities: [vision, text, code, reasoning]
+    capabilities: [text, code, reasoning]
     specialties: [code, reasoning, creative, simple_qa]
     cost_per_1k_input: 0.07
     cost_per_1k_output: 0.21
+    avg_latency_ms: 350
+    quality_score: 0.82
+
+  - name: llava-1.5-7b
+    type: general-vision
+    provider: a100
+    model_id: llava-hf/llava-1.5-7b-hf
+    api_base: "http://localhost:8002"
+    capabilities: [vision, text]
+    specialties: [simple_qa, creative]
+    cost_per_1k_input: 0.07
+    cost_per_1k_output: 0.21
     avg_latency_ms: 400
-    quality_score: 0.76
+    quality_score: 0.72

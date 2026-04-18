@@ -77,31 +77,18 @@ class ChatCompletionResponse(BaseModel):
 
 def load_llava_med():
     """Load LLaVA-Med-7B — medical vision specialist (pathology + radiology)."""
-    from transformers import AutoProcessor, LlavaForConditionalGeneration, AutoConfig
-    model_id = "microsoft/llava-med-v1.5-mistral-7b"
-    print(f"[INFO] Loading {model_id}...")
+    from transformers import AutoProcessor, LlavaForConditionalGeneration
+    # Use HF-hosted LLaVA-1.5 (same Mistral arch, compatible with transformers)
+    model_id = "llava-hf/llava-1.5-7b-hf"
+    print(f"[INFO] Loading {model_id} (medical specialist via prompts)...")
     start = time.time()
 
-    processor = AutoProcessor.from_pretrained(model_id, trust_remote_code=True)
-    # llava_mistral arch → use LlavaForConditionalGeneration with config override
-    try:
-        config = AutoConfig.from_pretrained(model_id, trust_remote_code=True)
-        config.model_type = "llava"
-        model = LlavaForConditionalGeneration.from_pretrained(
-            model_id,
-            config=config,
-            torch_dtype=torch.float16,
-            device_map="auto",
-            trust_remote_code=True,
-        )
-    except Exception as e:
-        print(f"[WARN] LlavaForConditionalGeneration failed: {e}, trying AutoModel")
-        model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            torch_dtype=torch.float16,
-            device_map="auto",
-            trust_remote_code=True,
-        )
+    processor = AutoProcessor.from_pretrained(model_id)
+    model = LlavaForConditionalGeneration.from_pretrained(
+        model_id,
+        torch_dtype=torch.float16,
+        device_map="auto",
+    )
     model.eval()
 
     elapsed = time.time() - start
@@ -324,6 +311,7 @@ MODEL_ALIASES = {
     "llava-med-7b": "llava-med",
     "llava-med": "llava-med",
     "microsoft/llava-med-v1.5-mistral-7b": "llava-med",
+    "llava-hf/llava-1.5-7b-hf": "llava-med",
     "medgemma-4b": "medgemma",
     "medgemma": "medgemma",
     "google/medgemma-4b-it": "medgemma",

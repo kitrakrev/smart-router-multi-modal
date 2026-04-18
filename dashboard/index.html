@@ -532,7 +532,8 @@ textarea.input { resize: vertical; min-height: 60px; font-family: var(--mono); f
       <input class="input" id="am-cost-out" placeholder="Cost/1k output" type="number" step="0.01">
       <input class="input" id="am-quality" placeholder="Quality 0-1" type="number" step="0.01">
       <div class="full" style="display:flex;gap:8px;">
-        <button class="btn btn-green" onclick="submitAddModel()">Add</button>
+        <button class="btn btn-green" onclick="submitAddModel(false)">Add (manual approve)</button>
+        <button class="btn btn-accent" onclick="submitAddModel(true)">Add & Auto-Probe</button>
         <button class="btn" onclick="toggleAddModel()">Cancel</button>
       </div>
     </div>
@@ -1550,9 +1551,11 @@ function toggleAddModel() {
   card.style.display = card.style.display === 'none' ? 'block' : 'none';
 }
 
-async function submitAddModel() {
+async function submitAddModel(autoProbe) {
+  var name = document.getElementById('am-name').value;
+  if (!name) { alert('Name required'); return; }
   var body = {
-    name: document.getElementById('am-name').value,
+    name: name,
     type: document.getElementById('am-type').value,
     provider: document.getElementById('am-provider').value || 'local',
     model_id: document.getElementById('am-model-id').value,
@@ -1562,9 +1565,31 @@ async function submitAddModel() {
     cost_per_1k_output: parseFloat(document.getElementById('am-cost-out').value) || 0,
     quality_score: parseFloat(document.getElementById('am-quality').value) || 0.7,
   };
+  // Step 1: Add model
   await fetch(API + '/v1/models', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
   toggleAddModel();
   loadModels();
+
+  if (autoProbe) {
+    // Step 2: Auto-probe to discover specialties
+    try {
+      var statusEl = document.createElement('div');
+      statusEl.style.cssText = 'position:fixed;top:60px;right:20px;background:var(--bg3);border:1px solid var(--accent);border-radius:8px;padding:12px 16px;z-index:999;font-size:13px;color:var(--accent)';
+      statusEl.textContent = 'Probing ' + name + '...';
+      document.body.appendChild(statusEl);
+
+      var resp = await fetch(API + '/v1/models/' + name + '/probe', {method:'POST'});
+      var data = await resp.json();
+      var specs = data.discovered_specialties || [];
+
+      statusEl.innerHTML = '<div style="font-weight:600;color:var(--green)">Probed & Approved!</div>' +
+        '<div style="font-size:11px;margin-top:4px">Specialties: ' + (specs.length ? specs.join(', ') : 'none detected') + '</div>';
+      setTimeout(function() { statusEl.remove(); }, 5000);
+      loadModels();
+    } catch(e) {
+      alert('Probe failed: ' + e);
+    }
+  }
 }
 
 async function discoverModels() {

@@ -1307,10 +1307,12 @@ function renderModels(models, stats) {
           '<button class="btn" onclick="document.getElementById(\'edit-' + m.name + '\').style.display=\'none\'">Cancel</button>' +
         '</div>' +
       '</div>' +
+      (s.degraded ? '<div style="color:var(--yellow);font-size:11px;margin:4px 0;font-weight:600">DEGRADED — ' + s.degradation_remaining_s + 's remaining</div>' : '') +
       '<div class="model-actions">' +
         '<button class="btn" onclick="document.getElementById(\'edit-' + m.name + '\').style.display=document.getElementById(\'edit-' + m.name + '\').style.display===\'none\'?\'block\':\'none\'">Edit</button>' +
         '<button class="btn" onclick="probeModel(\'' + m.name + '\')">Probe</button>' +
-        '<button class="btn btn-red" onclick="simulateDeg(\'' + m.name + '\')">Slow Down (60s)</button>' +
+        '<button class="btn btn-red" onclick="simulateDeg(\'' + m.name + '\')">Slow Down</button>' +
+        '<button class="btn" onclick="resetStats(\'' + m.name + '\')">Reset Stats</button>' +
         (m.enabled
           ? '<button class="btn" onclick="toggleModel(\'' + m.name + '\',false)">Disable</button>'
           : '<button class="btn btn-green" onclick="toggleModel(\'' + m.name + '\',true)">Enable</button>') +
@@ -1361,7 +1363,7 @@ function renderRadarChart(canvasId, scores, prevScores) {
   var cx = w / 2;
   var cy = h / 2;
   var radius = Math.min(cx, cy) - 40;
-  var axes = ['pathology','radiology','cardiology','dermatology','ophthalmology','emergency','pharmacology','general'];
+  var axes = ['pathology','radiology','dermatology','general','code','reasoning'];
   var numAxes = axes.length;
   var angleStep = (2 * Math.PI) / numAxes;
   var startAngle = -Math.PI / 2;
@@ -1510,6 +1512,13 @@ async function simulateDeg(name) {
     loadModels();
     alert(name + ' degraded for 60s: EMA=' + data.new_ema_latency + 'ms\n' + (data.note || ''));
   } catch(e) { alert('Simulate failed: ' + e); }
+}
+
+async function resetStats(name) {
+  try {
+    await fetch(API + '/v1/stats/reset/' + name, {method: 'POST'});
+    loadModels();
+  } catch(e) { alert('Reset failed: ' + e); }
 }
 
 async function simulateDegCustom(name) {

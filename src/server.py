@@ -1041,6 +1041,27 @@ async def simulate_degradation(request: SimulateRequest) -> JSONResponse:
     return JSONResponse(result)
 
 
+@app.post("/v1/stats/reset/{model_name}")
+async def reset_stats(model_name: str) -> JSONResponse:
+    """Reset all stats for a model — clears degradation, EMA, errors."""
+    s = stats_tracker.get_stats(model_name)
+    if s:
+        s.latency_ema = 0.0
+        s.error_rate_ema = 0.0
+        s.total_requests = 0
+        s.total_errors = 0
+        s.disabled_at = None
+        s.disable_reason = None
+        s._degradation_until = 0.0
+        s._degradation_latency = 0.0
+        s.latency_history = []
+        s.per_specialty_accuracy = {}
+        s.per_specialty_count = {}
+    # Re-enable in registry
+    model_registry.update_model(model_name, enabled=True)
+    return JSONResponse({"status": "reset", "model": model_name})
+
+
 # ---------------------------------------------------------------------------
 # Traces
 # ---------------------------------------------------------------------------

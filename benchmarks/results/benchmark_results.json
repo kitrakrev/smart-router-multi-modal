@@ -1,0 +1,49 @@
+{
+  "benchmark": "RouterArena",
+  "config": "/home/kanandan/smart-router-multi-modal/configs/routerarena.yaml",
+  "total_queries": 8400,
+  "blocked": 0,
+  "evaluated": 8400,
+  "routing_accuracy": 0.3279,
+  "overlap_accuracy": 0.848,
+  "primary_only_accuracy": 0.2724,
+  "optimal_selection_rate": 0.3279,
+  "cost_per_1k_router": 0.2491,
+  "cost_per_1k_baseline": 0.252,
+  "cost_ratio": 0.9885,
+  "avg_latency_ms": 14.99,
+  "p50_latency_ms": 13.05,
+  "p99_latency_ms": 30.95,
+  "model_distribution": {
+    "gpt-4o-mini": 2292,
+    "gemini-2.0-flash-001": 6108
+  },
+  "decision_distribution": {
+    "complex_reasoning": 563,
+    "general": 4046,
+    "code_generation": 1729,
+    "creative_writing": 1958,
+    "simple_qa": 104
+  },
+  "avg_similarity": 0.1533,
+  "metric_distribution": {
+    "math_metric": 280,
+    "mcq_accuracy": 5844,
+    "chess_accuracy": 148,
+    "exact_match": 689,
+    "code_accuracy": 385,
+    "meteor_score": 640,
+    "superglue_clozetest": 59,
+    "superglue_exact_match": 355
+  },
+  "gt_score_by_model": {
+    "gpt-4o-mini": {
+      "avg_score": 0.5097,
+      "count": 2292
+    },
+    "gemini-2.0-flash-001": {
+      "avg_score": 0.0683,
+      "count": 6108
+    }
+  }
+}

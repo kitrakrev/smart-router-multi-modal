@@ -158,6 +158,27 @@ class MedVisionRouter:
         specialty = await self._resolve_specialty(signals)
         decision.specialty = specialty
 
+        # ── Step 3b: Ambiguity detection ─────────────────────────────────
+        # If text similarity is very low, the query is ambiguous
+        ambiguity_threshold = 0.35
+        if signals.text.similarity < ambiguity_threshold:
+            decision.signals["ambiguity"] = {
+                "is_ambiguous": True,
+                "confidence": round(signals.text.similarity, 4),
+                "reason": f"Low specialty match ({signals.text.similarity:.3f} < {ambiguity_threshold})",
+                "fallback": "Routing to highest-quality generalist model",
+            }
+            # For ambiguous queries, prefer quality over cost
+            if strategy not in ("critical", "quality_first"):
+                strategy = "quality_first"
+                decision.budget_strategy = "quality_first"
+                logger.info("Ambiguous query (sim=%.3f) — upgraded to quality_first", signals.text.similarity)
+        else:
+            decision.signals["ambiguity"] = {
+                "is_ambiguous": False,
+                "confidence": round(signals.text.similarity, 4),
+            }
+
         # ── Step 4: Determine required capabilities ──────────────────────
         required_caps = self._determine_capabilities(signals, specialty)
 

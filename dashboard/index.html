@@ -310,6 +310,104 @@ textarea.input { resize: vertical; min-height: 60px; font-family: var(--mono); f
 .session-header { display: flex; justify-content: space-between; }
 .specialty-bar { display: flex; gap: 4px; margin-top: 6px; }
 .specialty-bar-seg { height: 4px; border-radius: 2px; }
+
+/* ================================================================
+   TAB 7: CHAT
+   ================================================================ */
+#panel-chat { padding: 0; display: none; }
+#panel-chat.active { display: flex; height: calc(100vh - 100px); }
+
+.chat-sidebar {
+  width: 25%; min-width: 220px; max-width: 340px;
+  background: var(--bg2); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; overflow: hidden;
+}
+.chat-sidebar-header {
+  padding: 12px; border-bottom: 1px solid var(--border);
+}
+.chat-session-list {
+  flex: 1; overflow-y: auto; padding: 6px;
+}
+.chat-session-item {
+  padding: 8px 10px; border-radius: 6px; cursor: pointer;
+  font-size: 12px; margin-bottom: 2px; display: flex;
+  justify-content: space-between; align-items: center;
+  color: var(--text2); transition: background 0.15s;
+  white-space: nowrap; overflow: hidden;
+}
+.chat-session-item:hover { background: var(--bg3); color: var(--text); }
+.chat-session-item.active { background: rgba(56,189,248,0.12); color: var(--accent); }
+.chat-session-meta {
+  font-size: 10px; color: var(--text2); font-family: var(--mono);
+  display: flex; gap: 6px; margin-top: 2px;
+}
+
+.chat-main {
+  flex: 1; display: flex; flex-direction: column; overflow: hidden;
+}
+.chat-messages {
+  flex: 1; overflow-y: auto; padding: 20px 24px; display: flex;
+  flex-direction: column; gap: 12px;
+}
+.chat-msg {
+  max-width: 70%; padding: 10px 14px; border-radius: 12px;
+  font-size: 13px; line-height: 1.55; word-wrap: break-word;
+  white-space: pre-wrap;
+}
+.chat-msg.user {
+  align-self: flex-end;
+  background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3);
+  border-bottom-right-radius: 4px;
+}
+.chat-msg.assistant {
+  align-self: flex-start;
+  background: var(--bg2); border: 1px solid var(--border);
+  border-bottom-left-radius: 4px;
+}
+.chat-msg-meta {
+  font-size: 11px; color: var(--text2); font-family: var(--mono);
+  margin-top: 6px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+}
+.chat-msg-meta .specialty-tag {
+  padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600;
+  background: rgba(34,197,94,0.15); color: var(--green);
+}
+.chat-msg-why {
+  cursor: pointer; color: var(--accent); font-size: 11px;
+  text-decoration: underline; text-underline-offset: 2px;
+}
+.chat-msg-explain {
+  display: none; margin-top: 6px; padding: 8px 10px;
+  background: var(--bg); border-radius: 6px;
+  font-size: 11px; font-family: var(--mono); color: var(--text2);
+  line-height: 1.6; white-space: pre-wrap;
+}
+.chat-msg-explain.open { display: block; }
+
+.chat-input-area {
+  padding: 12px 16px; border-top: 1px solid var(--border);
+  background: var(--bg2); display: flex; gap: 8px; align-items: flex-end;
+}
+.chat-input-area textarea {
+  flex: 1; min-height: 38px; max-height: 120px; resize: none;
+}
+.chat-input-area .chat-img-btn {
+  width: 36px; height: 36px; border-radius: 6px; border: 1px solid var(--border);
+  background: var(--bg3); color: var(--text2); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 16px;
+  flex-shrink: 0; transition: all 0.15s;
+}
+.chat-input-area .chat-img-btn:hover { border-color: var(--accent); color: var(--accent); }
+.chat-input-area .chat-img-btn.has-img { border-color: var(--green); color: var(--green); }
+.chat-input-area select { min-width: 110px; flex-shrink: 0; }
+.chat-send-btn {
+  padding: 8px 16px; border-radius: 6px; border: 1px solid var(--accent);
+  background: rgba(56,189,248,0.15); color: var(--accent); font-size: 13px;
+  font-weight: 600; cursor: pointer; font-family: var(--sans);
+  flex-shrink: 0; transition: all 0.15s;
+}
+.chat-send-btn:hover { background: rgba(56,189,248,0.25); }
+.chat-send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 </style>
 </head>
 <body>
@@ -336,6 +434,7 @@ textarea.input { resize: vertical; min-height: 60px; font-family: var(--mono); f
   <div class="tab" data-tab="models">Models</div>
   <div class="tab" data-tab="prompts">Prompts</div>
   <div class="tab" data-tab="sessions">Sessions</div>
+  <div class="tab" data-tab="chat">Chat</div>
 </div>
 
 <!-- ============================================================
@@ -457,6 +556,38 @@ textarea.input { resize: vertical; min-height: 60px; font-family: var(--mono); f
     <div>
       <div class="card-title" style="margin-bottom:8px;">Session Traces</div>
       <div id="session-traces" class="text2">Select a session.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================
+     TAB 7: CHAT
+     ============================================================ -->
+<div class="panel" id="panel-chat">
+  <div class="chat-sidebar">
+    <div class="chat-sidebar-header">
+      <button class="btn btn-accent" style="width:100%" onclick="chatNewSession()">+ New Session</button>
+    </div>
+    <div class="chat-session-list" id="chat-session-list"></div>
+  </div>
+  <div class="chat-main">
+    <div class="chat-messages" id="chat-messages">
+      <div style="margin:auto;color:var(--text2);font-size:13px;text-align:center;">
+        Start a new session or select one from the sidebar.
+      </div>
+    </div>
+    <div class="chat-input-area">
+      <button class="chat-img-btn" id="chat-img-btn" title="Attach image" onclick="document.getElementById('chat-img-input').click();">&#128247;</button>
+      <input type="file" accept="image/*" id="chat-img-input" style="display:none">
+      <textarea class="input" id="chat-input" placeholder="Type a message..." rows="1"></textarea>
+      <select class="input" id="chat-budget" style="min-width:110px;">
+        <option value="">auto</option>
+        <option value="balanced">balanced</option>
+        <option value="cheapest_capable">cheapest</option>
+        <option value="quality_first">quality</option>
+        <option value="critical">critical</option>
+      </select>
+      <button class="chat-send-btn" id="chat-send-btn" onclick="chatSend()">Send</button>
     </div>
   </div>
 </div>

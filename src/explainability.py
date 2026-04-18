@@ -185,6 +185,16 @@ def explain_decision(decision: RoutingDecision) -> RoutingExplanation:
         impact="high" if modality_type != "text_only" else "low",
     ))
 
+    # Ambiguity signal
+    ambiguity_sig = signals.get("ambiguity", {})
+    if ambiguity_sig.get("is_ambiguous"):
+        explanations.append(SignalExplanation(
+            signal_name="Ambiguity",
+            value=f"LOW CONFIDENCE ({ambiguity_sig.get('confidence', 0):.3f})",
+            contribution=ambiguity_sig.get("reason", "Query is ambiguous") + " — " + ambiguity_sig.get("fallback", ""),
+            impact="high",
+        ))
+
     # Cost breakdown
     est_cost = decision.estimated_cost
     # GPT-4o cost estimate (2.50/1K input + 10.00/1K output)

@@ -230,6 +230,7 @@ class ChatRequest(BaseModel):
     max_tokens: Optional[int] = None
     user: Optional[str] = None
     session_id: Optional[str] = None
+    budget_strategy: Optional[str] = None
 
 class EvalRequest(BaseModel):
     query: str

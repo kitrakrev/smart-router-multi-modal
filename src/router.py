@@ -26,7 +26,7 @@ from src.signals import AllSignalsResult, run_all_signals
 from src.taxonomy import SpecialtyTree, resolve_alias
 from src.registry import model_registry, stats_tracker, ModelEntry
 from src.prompts import prompt_manager
-from src.memory import session_store, SessionTrace
+from src.memory import session_store, user_memory_store, SessionTrace
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +211,7 @@ class MedVisionRouter:
         required_caps = self._determine_capabilities(signals, specialty)
 
         # ── Step 5: Select model by strategy ─────────────────────────────
-        model = self._select_model(required_caps, specialty, strategy)
+        model = self._select_model(required_caps, specialty, strategy, user_id=user_id)
         if model is None:
             model = self._select_model_partial(required_caps, specialty)
 
@@ -369,8 +369,16 @@ class MedVisionRouter:
         required_caps: list[str],
         specialty: str,
         strategy: str,
+        user_id: Optional[str] = None,
     ) -> Optional[ModelEntry]:
-        """Select model using budget strategy."""
+        """Select model using budget strategy + user/global feedback.
+
+        Scoring incorporates:
+        - Base quality_score from config
+        - Global reputation: per-specialty accuracy from all users (EMA stats)
+        - User-level preference: per-user model accuracy history
+        - Critical strategy bypasses all feedback — always picks best base quality
+        """
         capable = model_registry.get_capable_models(required_caps)
 
         # Filter by specialty for medical queries
@@ -392,6 +400,7 @@ class MedVisionRouter:
         if not capable:
             return None
 
+        # CRITICAL: always best model, ignore all feedback/metrics
         if strategy == "critical":
             return max(capable, key=lambda m: m.quality_score)
 
@@ -405,14 +414,24 @@ class MedVisionRouter:
             spec_key = specialty.split(".")[-1] if "." in specialty else specialty
 
             def perf_score(m: ModelEntry) -> float:
+                # Global reputation from all users
+                global_score = m.quality_score
                 s = stats_tracker.get_stats(m.name)
                 if s and spec_key in s.per_specialty_accuracy:
-                    return s.per_specialty_accuracy[spec_key]
-                return m.quality_score
+                    global_score = s.per_specialty_accuracy[spec_key]
+
+                # User-level adjustment (single user's experience)
+                user_adj = 0.0
+                if user_id:
+                    user_mem = user_memory_store.get(user_id)
+                    if user_mem:
+                        user_adj = user_mem.model_preference_score(m.name)
+
+                return global_score + user_adj
 
             return max(capable, key=perf_score)
 
-        # balanced (default)
+        # balanced (default) — incorporates user + global feedback
         def balanced_score(m: ModelEntry) -> float:
             cost = m.cost_per_1k_input + m.cost_per_1k_output
             max_cost = max(
@@ -423,11 +442,31 @@ class MedVisionRouter:
             cost_inv = 1.0 - (cost / max_cost) if max_cost > 0 else 1.0
             latency_inv = 1.0 - (m.avg_latency_ms / max_latency) if max_latency > 0 else 1.0
 
-            return (
+            base = (
                 BALANCED_WEIGHTS["quality"] * m.quality_score
                 + BALANCED_WEIGHTS["cost_inv"] * cost_inv
                 + BALANCED_WEIGHTS["latency_inv"] * latency_inv
             )
+
+            # Global reputation adjustment: if many users gave bad feedback,
+            # global per-specialty accuracy drops → model score drops for everyone
+            global_adj = 0.0
+            s = stats_tracker.get_stats(m.name)
+            if s and s.total_requests >= 5:
+                global_perf = stats_tracker.performance_score(m.name)
+                # Shift from neutral (0.5) — positive if good, negative if bad
+                global_adj = (global_perf - 0.5) * 0.2  # max ±0.1
+
+            # Per-user adjustment: only affects this user's routing
+            # One user's bad experience doesn't penalize globally
+            user_adj = 0.0
+            if user_id:
+                user_mem = user_memory_store.get(user_id)
+                if user_mem:
+                    user_adj = user_mem.model_preference_score(m.name)
+                    # max +0.09 (good history) / -0.21 (bad history)
+
+            return base + global_adj + user_adj
 
         return max(capable, key=balanced_score)
 

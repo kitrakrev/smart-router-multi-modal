@@ -862,6 +862,56 @@ async def user_stats(user_id: str) -> JSONResponse:
     return JSONResponse(mem.to_dict())
 
 
+class FeedbackRequest(BaseModel):
+    trace_id: str
+    user_id: str
+    model_name: str
+    specialty: str
+    rating: float  # 0.0 (bad) to 1.0 (good)
+
+
+@app.post("/v1/feedback")
+async def submit_feedback(request: FeedbackRequest) -> JSONResponse:
+    """User feedback on model response quality.
+
+    Single user bad rating → reduces model score for THAT USER only.
+    Multiple users bad rating → global stats degrade → model score drops for everyone.
+    """
+    # Record in user memory (per-user)
+    user_mem = user_memory_store.get_or_create(request.user_id)
+    user_mem.record_query(
+        query=f"[feedback:{request.trace_id}]",
+        specialty=request.specialty,
+        model=request.model_name,
+        success=request.rating >= 0.5,
+        complexity=0.5,
+    )
+
+    # Record in global stats (affects all users if many report bad)
+    stats_tracker.update_stats(
+        model_name=request.model_name,
+        latency_ms=0,  # feedback doesn't affect latency
+        success=request.rating >= 0.5,
+        specialty=request.specialty,
+        accuracy=request.rating,
+    )
+
+    # Check if this model is getting bad feedback from multiple users
+    user_pref = user_mem.model_preference_score(request.model_name)
+    global_perf = stats_tracker.performance_score(request.model_name)
+
+    return JSONResponse({
+        "status": "recorded",
+        "user_model_score": round(user_pref, 4),
+        "global_model_score": round(global_perf, 4),
+        "note": (
+            "User-level adjustment applied"
+            if request.rating < 0.5
+            else "Positive feedback recorded"
+        ),
+    })
+
+
 # ---------------------------------------------------------------------------
 # Stats
 # ---------------------------------------------------------------------------

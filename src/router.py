@@ -269,10 +269,12 @@ class MedVisionRouter:
         """Resolve specialty from text and vision signals + taxonomy."""
         text_specialty = signals.text.matched_specialty
 
-        # If vision detected a specific image type, use taxonomy to find specialty
+        # If vision detected a specific image type with HIGH confidence, use it
+        # Threshold 0.5 avoids routing non-medical images (e.g. Pikachu) to medical
+        vision_threshold = 0.5
         if (
             signals.vision.image_type not in ("none", "unknown")
-            and signals.vision.similarity_score > 0.3
+            and signals.vision.similarity_score > vision_threshold
             and self._taxonomy
         ):
             image_type = signals.vision.image_type
@@ -285,6 +287,15 @@ class MedVisionRouter:
                         if text_base in sp.path:
                             return sp.path
                 return image_specialties[0].path
+
+        # If image present but low vision confidence AND text isn't medical,
+        # treat as general query with image (not medical)
+        if (
+            signals.modality.has_image
+            and signals.vision.similarity_score <= vision_threshold
+            and not text_specialty.startswith("medical.")
+        ):
+            return text_specialty  # e.g. general.simple_qa for "what is this image?"
 
         # Resolve through taxonomy for dedup
         if text_specialty.startswith("medical.") and self._taxonomy:
@@ -305,7 +316,16 @@ class MedVisionRouter:
         if signals.modality.has_image:
             caps.append("vision")
 
-        if specialty.startswith("medical."):
+        # Only require medical capability if confident about medical content
+        is_confident_medical = (
+            specialty.startswith("medical.")
+            and signals.text.similarity > 0.3
+        )
+        # For images: also check vision confidence
+        if signals.modality.has_image and signals.vision.similarity_score < 0.5:
+            is_confident_medical = False  # non-medical image overrides text
+
+        if is_confident_medical:
             caps.append("medical")
 
         if signals.complexity.complexity_score > 0.7:

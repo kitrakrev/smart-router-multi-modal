@@ -700,22 +700,40 @@ function setExample(key) {
 async function sendQuery() {
   const q = document.getElementById('query-input').value.trim();
   if (!q) return;
+  var strategyEl = document.getElementById('strategy-select');
+  var strategy = strategyEl ? strategyEl.value : 'auto';
   document.getElementById('send-btn').textContent = '...';
   try {
-    const resp = await fetch(API + '/v1/eval', {
+    // Build messages with image if attached
+    var content;
+    if (imageBase64) {
+      content = [
+        {type: 'text', text: q},
+        {type: 'image_url', image_url: {url: 'data:image/png;base64,' + imageBase64}}
+      ];
+    } else {
+      content = q;
+    }
+    // Call chat/completions for full routing + model inference
+    var body = {
+      messages: [{role: 'user', content: content}],
+      session_id: 'dashboard-' + Date.now().toString(36),
+      user: 'dashboard-user',
+    };
+    if (strategy && strategy !== 'auto') body.budget_strategy = strategy;
+
+    const resp = await fetch(API + '/v1/chat/completions', {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        query: q,
-        has_image: !!imageBase64,
-        image_base64: imageBase64,
-        user_id: 'dashboard-user',
-      })
+      body: JSON.stringify(body)
     });
     const data = await resp.json();
-    addTrace(data);
+    // Extract routing trace and add model response
+    var trace = data.routing || {};
+    trace.model_response = (data.choices && data.choices[0]) ? data.choices[0].message.content : '';
+    addTrace(trace);
   } catch(e) {
-    console.error('Eval error:', e);
+    console.error('Route error:', e);
   }
   document.getElementById('send-btn').textContent = 'Route';
 }
@@ -902,7 +920,8 @@ function addTrace(t) {
       '<div class="prompt-collapse" onclick="togglePrompt(this)">Show prompt</div>' +
     '</div>' +
     '<div class="prompt-text">' + escHtml(t.prompt_used || '') + '</div>' +
-    '<div class="latency-breakdown">' + latencyHtml + '</div>';
+    '<div class="latency-breakdown">' + latencyHtml + '</div>' +
+    (t.model_response ? '<div style="margin-top:10px;padding:10px;background:var(--bg2);border-radius:6px;border:1px solid var(--border)"><div style="font-size:10px;color:var(--accent);margin-bottom:4px;font-weight:600">MODEL RESPONSE</div><div style="font-size:12px;color:var(--text);white-space:pre-wrap;max-height:200px;overflow-y:auto">' + escHtml(t.model_response) + '</div></div>' : '');
   list.insertBefore(el, list.firstChild);
 }
 

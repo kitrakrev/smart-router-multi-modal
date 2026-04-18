@@ -781,7 +781,10 @@ async def probe_model(name: str) -> JSONResponse:
             discovered_specialties.append(spec)
 
     if discovered_specialties:
-        model_registry.update_model(name, specialties=discovered_specialties)
+        # Merge with existing specialties (don't replace)
+        existing = model.specialties or []
+        merged = list(set(existing + discovered_specialties))
+        model_registry.update_model(name, specialties=merged)
         # Auto-approve if model passed at least one specialty
         model_registry.update_model(name, approved=True)
         logger.info("Model %s probed: specialties=%s, auto-approved", name, discovered_specialties)

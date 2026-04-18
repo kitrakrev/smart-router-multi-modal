@@ -615,6 +615,13 @@ async def eval_route(request: EvalRequest) -> JSONResponse:
         request.has_image,
         user_id=request.user_id or "anonymous",
     )
+    # Record stats for eval queries too
+    stats_tracker.update_stats(
+        trace.get("model_selected", "unknown"),
+        trace.get("total_latency_ms", 0),
+        success=True,
+        specialty=trace.get("specialty_matched", ""),
+    )
     return JSONResponse(trace)
 
 
@@ -644,9 +651,18 @@ async def explain_route(request: EvalRequest) -> JSONResponse:
 @app.get("/v1/models")
 async def list_models() -> JSONResponse:
     models = model_registry.list_models()
+    result = []
+    for m in models:
+        info = m.to_dict()
+        s = stats_tracker.get_stats(m.name)
+        if s:
+            info["runtime_stats"] = s.to_dict()
+        else:
+            info["runtime_stats"] = {}
+        result.append(info)
     return JSONResponse({
-        "models": [m.to_dict() for m in models],
-        "count": len(models),
+        "models": result,
+        "count": len(result),
     })
 
 
@@ -704,19 +720,32 @@ async def probe_model(name: str) -> JSONResponse:
     if model is None:
         raise HTTPException(404, f"Model {name} not found")
 
-    # Simulated probe (no real model call in prototype)
-    async def sim_query(question: str) -> str:
-        # Return simulated responses with relevant keywords
-        return (
-            f"Simulated response for: {question}. "
-            "Features include glandular structures, mucin secretion, cellular atypia, "
-            "invasion of surrounding tissue, increased mitosis, nuclear pleomorphism, "
-            "consolidation with air bronchogram, ST elevation with Q wave changes, "
-            "asymmetry of borders with color variation and diameter evolution, "
-            "lucency and absent lung markings beyond pleural line."
-        )
+    # Call real model via model_runner if api_base configured, else simulate
+    if model.api_base and httpx is not None:
+        async def real_query(question: str) -> str:
+            try:
+                async with httpx.AsyncClient(timeout=60.0) as client:
+                    resp = await client.post(
+                        f"{model.api_base}/v1/chat/completions",
+                        json={
+                            "model": model.model_id,
+                            "messages": [{"role": "user", "content": question}],
+                            "max_tokens": 256, "temperature": 0.1,
+                        },
+                    )
+                    resp.raise_for_status()
+                    data = resp.json()
+                    return data["choices"][0]["message"]["content"]
+            except Exception as e:
+                logger.warning("Probe query failed for %s: %s", name, e)
+                return f"Error: {e}"
+        query_fn = real_query
+    else:
+        async def sim_query(question: str) -> str:
+            return f"[No model_runner] Cannot probe {name} without api_base configured."
+        query_fn = sim_query
 
-    report = await capability_prober.probe_model(name, sim_query)
+    report = await capability_prober.probe_model(name, query_fn)
     return JSONResponse(report.to_dict())
 
 

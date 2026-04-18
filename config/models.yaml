@@ -8,7 +8,7 @@ models:
     model_id: google/medgemma-1.5-4b-it
     api_base: "http://localhost:8001"
     capabilities: [vision, medical, text]
-    specialties: [pathology, radiology, dermatology]
+    specialties: [dermatology]
     cost_per_1k_input: 0.05
     cost_per_1k_output: 0.15
     avg_latency_ms: 300
@@ -24,7 +24,7 @@ models:
     cost_per_1k_input: 0.07
     cost_per_1k_output: 0.21
     avg_latency_ms: 450
-    quality_score: 0.88
+    quality_score: 0.90
 
   - name: llava-1.6-7b
     type: general-vision

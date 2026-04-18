@@ -143,10 +143,15 @@ textarea.input { resize: vertical; min-height: 60px; font-family: var(--mono); f
    TAB 1: LIVE TRACES
    ================================================================ */
 #trace-input-area {
-  display: flex; gap: 12px; margin-bottom: 16px; align-items: flex-start;
+  display: flex; gap: 12px; margin-bottom: 12px; align-items: flex-start;
 }
-#trace-input-area textarea { flex: 1; min-height: 48px; }
-.example-btns { display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap; }
+#trace-input-area textarea { flex: 1; min-height: 48px; max-height: 80px; }
+.example-btns { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+#trace-list { max-height: calc(100vh - 260px); overflow-y: auto; }
+.trace-item {
+  background: var(--bg2); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px 16px; margin-bottom: 10px;
+}
 
 .drop-zone {
   border: 2px dashed var(--border); border-radius: 8px; padding: 12px;
@@ -470,12 +475,7 @@ textarea.input { resize: vertical; min-height: 60px; font-family: var(--mono); f
     <button class="btn" onclick="setExample('pathology')">Tissue Analysis</button>
     <button class="btn" onclick="setExample('radiology')">X-Ray Reading</button>
     <button class="btn" onclick="setExample('dermatology')">Skin Check</button>
-    <button class="btn" onclick="setExample('drug')">Drug Check</button>
-    <button class="btn" onclick="setExample('general_med')">General Health</button>
     <button class="btn" onclick="setExample('code')">Write Code</button>
-    <button class="btn" onclick="setExample('general')">Simple Q&A</button>
-    <button class="btn" onclick="setExample('jailbreak')" style="border-color:var(--yellow);color:var(--yellow)">Safety Test</button>
-    <button class="btn" onclick="setExample('emergency')" style="border-color:var(--red);color:var(--red)">Emergency</button>
   </div>
   <div id="trace-list"></div>
 </div>

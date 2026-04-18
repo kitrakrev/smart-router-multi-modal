@@ -2089,7 +2089,8 @@ async function chatSend() {
 // Initial health check
 // ----------------------------------------------------------------
 fetch(API + '/health').then(function(r){return r.json();}).then(function(d) {
-  document.getElementById('model-count').textContent = d.models + ' models';
+  document.getElementById('model-count').textContent = (d.models_live || d.models) + '/' + d.models + ' models live';
+  document.getElementById('model-count').style.color = (d.models_live === d.models) ? 'var(--green)' : 'var(--yellow)';
   document.getElementById('trace-count').textContent = d.traces + ' traces';
 }).catch(function(){});
 

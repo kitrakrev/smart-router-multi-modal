@@ -1180,10 +1180,27 @@ async def dashboard() -> HTMLResponse:
 
 @app.get("/health")
 async def health() -> JSONResponse:
+    # Check which model servers are actually reachable
+    models = model_registry.list_models()
+    live_models = []
+    for m in models:
+        if m.api_base and httpx is not None:
+            try:
+                async with httpx.AsyncClient(timeout=2.0) as client:
+                    resp = await client.get(f"{m.api_base}/health")
+                    if resp.status_code == 200:
+                        live_models.append(m.name)
+            except Exception:
+                pass
+        else:
+            live_models.append(m.name)  # no api_base = config-only model
+
     return JSONResponse({
         "status": "healthy",
         "version": "2.0.0",
-        "models": len(model_registry.list_models()),
+        "models": len(models),
+        "models_live": len(live_models),
+        "live_model_names": live_models,
         "traces": len(_trace_log),
         "sessions": len(session_store.list_sessions()),
     })

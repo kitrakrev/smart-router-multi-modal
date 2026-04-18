@@ -945,15 +945,28 @@ function addTrace(t) {
   const promptSrc = t.prompt_source || 'auto';
   const promptBadge = promptSrc === 'dspy' ? 'badge-dspy' : promptSrc === 'manual' ? 'badge-manual' : 'badge-auto';
 
-  let latencyHtml = '';
+  // Build step-by-step latency breakdown
+  var signalMs = 0;
   if (t.signal_latency_ms) {
-    Object.entries(t.signal_latency_ms).forEach(([k,v]) => {
-      latencyHtml += '<span>' + k + ': ' + v.toFixed(1) + 'ms</span> ';
-    });
+    Object.values(t.signal_latency_ms).forEach(function(v) { signalMs += v; });
   }
-  latencyHtml += '<span>routing: ' + (t.routing_latency_ms||0).toFixed(0) + 'ms</span>';
-  if (t.model_latency_ms) latencyHtml += '<span>model: ' + (t.model_latency_ms||0).toFixed(0) + 'ms</span>';
-  latencyHtml += '<span style="color:var(--accent)">total: ' + (t.total_latency_ms||0).toFixed(0) + 'ms</span>';
+  var routingMs = t.routing_latency_ms || 0;
+  var modelMs = t.model_latency_ms || 0;
+  var totalMs = t.total_latency_ms || 0;
+
+  var latencyHtml = '<div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">';
+  // Signals
+  latencyHtml += '<span style="background:var(--bg3);padding:2px 6px;border-radius:4px">signals: ' + signalMs.toFixed(0) + 'ms</span>';
+  latencyHtml += '<span style="color:var(--text2)">→</span>';
+  // Routing
+  latencyHtml += '<span style="background:var(--bg3);padding:2px 6px;border-radius:4px">routing: ' + routingMs.toFixed(0) + 'ms</span>';
+  if (modelMs > 0) {
+    latencyHtml += '<span style="color:var(--text2)">→</span>';
+    latencyHtml += '<span style="background:var(--bg3);padding:2px 6px;border-radius:4px">model: ' + modelMs.toFixed(0) + 'ms</span>';
+  }
+  latencyHtml += '<span style="color:var(--text2)">→</span>';
+  latencyHtml += '<span style="background:rgba(56,189,248,0.15);padding:2px 6px;border-radius:4px;color:var(--accent);font-weight:600">total: ' + totalMs.toFixed(0) + 'ms</span>';
+  latencyHtml += '</div>';
 
   const tools = (t.tools_suggested || []).join(', ') || 'none';
   const traceId = t.trace_id || Math.random().toString(36).slice(2,8);
@@ -963,11 +976,11 @@ function addTrace(t) {
   const el = document.createElement('div');
   el.className = 'trace-item';
   el.innerHTML =
-    '<div class="trace-header">' +
-      '<span class="mono text2">#' + traceId + '</span>' +
-      '<span style="font-size:11px;color:var(--text2)">' + new Date().toLocaleTimeString() + '</span>' +
+    '<div class="trace-header" style="cursor:pointer" onclick="var b=this.nextElementSibling;b.style.display=b.style.display===\'none\'?\'block\':\'none\';this.querySelector(\'.collapse-icon\').textContent=b.style.display===\'none\'?\'▶\':\'▼\'">' +
+      '<span><span class="collapse-icon" style="margin-right:6px;font-size:10px">▼</span><span class="mono text2">#' + traceId + '</span> <span style="color:var(--text);font-size:12px">' + escHtml((t.query_preview||'').substring(0,50)) + '</span></span>' +
+      '<span style="font-size:11px;color:var(--text2)">' + (t.model_selected||'') + ' · ' + new Date().toLocaleTimeString() + '</span>' +
     '</div>' +
-    '<div class="trace-query">' + escHtml(t.query_preview || '') + '</div>' +
+    '<div class="trace-body">' +
     '<div class="trace-signals">' +
       '<div class="signal-chip">image <span class="val">' + (t.image_type_detected || 'none') + '</span></div>' +
     '</div>' +
@@ -1009,7 +1022,8 @@ function addTrace(t) {
         '<button class="btn btn-green" style="font-size:18px;padding:4px 12px" onclick="sendFeedback(\'' + traceId + '\',\'' + (t.model_selected||'') + '\',\'' + (t.specialty_matched||'') + '\',1.0,this)">&#128077;</button>' +
         '<button class="btn btn-red" style="font-size:18px;padding:4px 12px" onclick="sendFeedback(\'' + traceId + '\',\'' + (t.model_selected||'') + '\',\'' + (t.specialty_matched||'') + '\',0.0,this)">&#128078;</button>' +
         '<span class="text2 small feedback-status"></span>' +
-      '</div></div>' : '');
+      '</div></div>' : '') +
+    '</div>';  // close trace-body
 
   // Track cost savings
   var queryCost = t.cost_estimate || 0;

@@ -900,31 +900,87 @@ async def submit_feedback(request: FeedbackRequest) -> JSONResponse:
     user_pref = user_mem.model_preference_score(request.model_name)
     global_perf = stats_tracker.performance_score(request.model_name)
 
-    # Runtime prompt adaptation: if model gets consistently bad feedback
-    # on a specialty, append a refinement instruction to the prompt
+    # Runtime prompt adaptation via LLM:
+    # If model gets consistently bad feedback on a specialty,
+    # use fallback LLM to generate a targeted prompt refinement
     prompt_adapted = False
+    adaptation_detail = ""
     s = stats_tracker.get_stats(request.model_name)
     if s and request.specialty in s.per_specialty_accuracy:
         spec_acc = s.per_specialty_accuracy[request.specialty]
         spec_count = s.per_specialty_count.get(request.specialty, 0)
-        # If accuracy drops below 0.5 after 5+ feedbacks, adapt prompt
-        if spec_acc < 0.5 and spec_count >= 5:
+        # Trigger after 3+ bad feedbacks with accuracy < 0.5
+        if spec_acc < 0.5 and spec_count >= 3:
             current = prompt_manager.get_prompt(
                 request.model_name, "specialist", request.specialty
             )
-            adapted_prompt = (
-                current.system_prompt.rstrip()
-                + "\n\nIMPORTANT: Previous responses in this area received negative feedback. "
-                "Be more thorough, cite evidence, and provide step-by-step reasoning."
-            )
+            # Use fallback LLM to generate targeted refinement
+            try:
+                from src.fallback_classifier import FallbackClassifier
+                classifier = await FallbackClassifier.get_instance()
+                if classifier._loaded:
+                    refine_prompt = (
+                        f"The model '{request.model_name}' is performing poorly on "
+                        f"'{request.specialty}' queries (accuracy: {spec_acc:.0%} after "
+                        f"{spec_count} feedbacks). Current system prompt:\n"
+                        f"{current.system_prompt[:200]}\n\n"
+                        f"Generate a 1-2 sentence addition to improve the prompt. "
+                        f"Be specific to {request.specialty}. Output ONLY the addition."
+                    )
+                    result = await classifier.classify(refine_prompt)
+                    refinement = result.domain  # LLM output repurposed
+                    # Fallback to structured refinement if LLM gives domain label
+                    if refinement in ("pathology", "radiology", "dermatology", "general_medicine"):
+                        refinements = {
+                            "pathology": "Describe histological features systematically. Include WHO classification, grade, and margin status. Cite morphological evidence for each finding.",
+                            "radiology": "Use structured reporting: Technique, Findings by region, Impression, Recommendations. Compare with prior studies when relevant.",
+                            "dermatology": "Apply dermoscopic criteria (ABCDE, 7-point checklist). Provide differential diagnosis ranked by likelihood with management plan.",
+                            "general_medicine": "Consider both common and must-not-miss diagnoses. Include relevant investigations and referral criteria.",
+                        }
+                        refinement = refinements.get(refinement, "Provide more detailed, evidence-based analysis with structured reasoning.")
+                    adapted_prompt = current.system_prompt.rstrip() + "\n\n" + refinement
+                    adaptation_detail = refinement
+                else:
+                    # LLM not available — use structured fallback per specialty
+                    refinements = {
+                        "pathology": "Always include: tissue type, cellular architecture, WHO classification grade, margin status, and immunohistochemistry recommendations.",
+                        "radiology": "Structure as: Technique → Findings → Impression → Recommendations. Note incidental findings. Suggest follow-up.",
+                        "dermatology": "Apply ABCDE criteria. Describe dermoscopic structures. Rank differential diagnoses. Include management plan.",
+                    }
+                    refinement = refinements.get(
+                        request.specialty,
+                        "Provide step-by-step evidence-based reasoning. Cite clinical guidelines where applicable."
+                    )
+                    adapted_prompt = current.system_prompt.rstrip() + "\n\n" + refinement
+                    adaptation_detail = refinement
+            except Exception as e:
+                logger.warning("LLM prompt refinement failed: %s", e)
+                adapted_prompt = (
+                    current.system_prompt.rstrip()
+                    + "\n\nProvide thorough, evidence-based analysis with structured reasoning."
+                )
+                adaptation_detail = "Generic refinement (LLM unavailable)"
+
             prompt_manager.set_manual_override(
                 request.model_name, request.specialty, adapted_prompt
             )
             prompt_adapted = True
             logger.info(
-                "Auto-adapted prompt for %s::%s (accuracy=%.2f after %d feedbacks)",
+                "Auto-adapted prompt for %s::%s (accuracy=%.2f, %d feedbacks): %s",
                 request.model_name, request.specialty, spec_acc, spec_count,
+                adaptation_detail[:80],
             )
+            # Broadcast prompt change
+            await broadcaster.broadcast({
+                "type": "prompt_adapted",
+                "data": {
+                    "model": request.model_name,
+                    "specialty": request.specialty,
+                    "accuracy": round(spec_acc, 2),
+                    "feedbacks": spec_count,
+                    "refinement": adaptation_detail[:150],
+                },
+            })
 
     return JSONResponse({
         "status": "recorded",

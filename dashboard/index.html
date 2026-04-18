@@ -641,6 +641,18 @@ function connectWS() {
       const msg = JSON.parse(ev.data);
       if (msg.type === 'trace') addTrace(msg.data);
       if (msg.type === 'degradation') loadModels();
+      if (msg.type === 'prompt_adapted') {
+        var d = msg.data;
+        // Show notification banner
+        var banner = document.createElement('div');
+        banner.style.cssText = 'position:fixed;top:60px;right:20px;background:var(--bg3);border:1px solid var(--yellow);border-radius:8px;padding:12px 16px;z-index:999;max-width:400px;font-size:12px;animation:fadeIn 0.3s';
+        banner.innerHTML = '<div style="color:var(--yellow);font-weight:600;margin-bottom:4px">Prompt Auto-Adapted</div>' +
+          '<div style="color:var(--text2)">' + d.model + ' x ' + d.specialty + ' (accuracy: ' + (d.accuracy*100).toFixed(0) + '% after ' + d.feedbacks + ' feedbacks)</div>' +
+          '<div style="color:var(--text);margin-top:4px;font-family:var(--mono);font-size:11px">' + (d.refinement || '') + '</div>';
+        document.body.appendChild(banner);
+        setTimeout(function() { banner.remove(); }, 8000);
+        loadPrompts();
+      }
     } catch(e) {}
   };
 }

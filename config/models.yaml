@@ -31,7 +31,7 @@ models:
     provider: a100
     model_id: meta-llama/Llama-3.1-8B-Instruct
     api_base: "http://localhost:8002"
-    capabilities: [text, code, reasoning, vision]
+    capabilities: [text, code, reasoning]
     cost_per_1k_input: 0.03
     cost_per_1k_output: 0.06
     avg_latency_ms: 200
@@ -47,3 +47,14 @@ models:
     cost_per_1k_output: 0.21
     avg_latency_ms: 350
     quality_score: 0.82
+
+  - name: llava-1.6-7b
+    type: generalist
+    provider: a100
+    model_id: llava-hf/llava-v1.6-mistral-7b-hf
+    api_base: "http://localhost:8002"
+    capabilities: [vision, text]
+    cost_per_1k_input: 0.07
+    cost_per_1k_output: 0.21
+    avg_latency_ms: 400
+    quality_score: 0.76

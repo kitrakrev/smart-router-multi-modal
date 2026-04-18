@@ -104,15 +104,32 @@ class TextSignalResult:
 
 
 class TextSignalModel:
-    """Lazy-loaded MiniLM model for text embedding and specialty matching."""
+    """Dual-embedding model: medical (BioLORD) + general (BGE-small) ensemble.
+
+    Runs both models, takes max similarity per specialty. Medical exemplars
+    score higher on BioLORD, general exemplars on BGE. Falls back to
+    MiniLM-L6-v2 if neither BioLORD nor BGE available.
+    """
 
     _instance: Optional["TextSignalModel"] = None
     _lock: asyncio.Lock = asyncio.Lock()
 
+    # Model priority: try best first, fall back
+    MEDICAL_MODEL = "FremyCompany/BioLORD-2023"
+    GENERAL_MODEL = "BAAI/bge-small-en-v1.5"
+    FALLBACK_MODEL = "all-MiniLM-L6-v2"
+
     def __init__(self) -> None:
+        self._medical_model = None
+        self._general_model = None
+        self._medical_embeddings: dict[str, np.ndarray] = {}
+        self._general_embeddings: dict[str, np.ndarray] = {}
+        # Fallback: single model if dual load fails
         self._model = None
         self._exemplar_embeddings: dict[str, np.ndarray] = {}
         self._taxonomy_exemplars: dict[str, list[str]] = {}
+        self._dual_mode = False
+        self._models_loaded: list[str] = []
 
     @classmethod
     async def get_instance(cls) -> "TextSignalModel":
@@ -130,28 +147,68 @@ class TextSignalModel:
         await loop.run_in_executor(None, self._load_sync)
 
     def _load_sync(self) -> None:
-        """Synchronous loading of model and exemplar computation."""
+        """Load dual models (medical + general) or fall back to single."""
         try:
             from sentence_transformers import SentenceTransformer
-
-            self._model = SentenceTransformer("all-MiniLM-L6-v2")
-            logger.info("Loaded all-MiniLM-L6-v2 for text signal")
         except ImportError:
             logger.error("sentence-transformers not installed. Text signal unavailable.")
             return
 
-        # Load taxonomy to enrich exemplars if available
         self._load_taxonomy_exemplars()
-
-        # Merge taxonomy-derived exemplars with defaults
         all_exemplars = {**SPECIALTY_EXEMPLARS, **self._taxonomy_exemplars}
 
-        # Pre-compute averaged embeddings per specialty
-        for specialty, queries in all_exemplars.items():
-            embeddings = self._model.encode(queries, convert_to_numpy=True)
-            avg = np.mean(embeddings, axis=0)
-            avg = avg / np.linalg.norm(avg)
-            self._exemplar_embeddings[specialty] = avg
+        # Try loading dual models
+        medical_loaded = False
+        general_loaded = False
+
+        try:
+            self._medical_model = SentenceTransformer(self.MEDICAL_MODEL)
+            logger.info("Loaded medical embedding: %s", self.MEDICAL_MODEL)
+            medical_loaded = True
+            self._models_loaded.append(self.MEDICAL_MODEL)
+        except Exception as e:
+            logger.warning("BioLORD unavailable (%s), will use fallback", e)
+
+        try:
+            self._general_model = SentenceTransformer(self.GENERAL_MODEL)
+            logger.info("Loaded general embedding: %s", self.GENERAL_MODEL)
+            general_loaded = True
+            self._models_loaded.append(self.GENERAL_MODEL)
+        except Exception as e:
+            logger.warning("BGE-small unavailable (%s), will use fallback", e)
+
+        if medical_loaded and general_loaded:
+            self._dual_mode = True
+            # Pre-compute embeddings for both models
+            for specialty, queries in all_exemplars.items():
+                # Medical model embeddings
+                med_emb = self._medical_model.encode(queries, convert_to_numpy=True)
+                med_avg = np.mean(med_emb, axis=0)
+                self._medical_embeddings[specialty] = med_avg / np.linalg.norm(med_avg)
+                # General model embeddings
+                gen_emb = self._general_model.encode(queries, convert_to_numpy=True)
+                gen_avg = np.mean(gen_emb, axis=0)
+                self._general_embeddings[specialty] = gen_avg / np.linalg.norm(gen_avg)
+            logger.info("Dual-embedding mode: %s + %s", self.MEDICAL_MODEL, self.GENERAL_MODEL)
+        else:
+            # Fallback to single model
+            fallback_name = self.MEDICAL_MODEL if medical_loaded else (
+                self.GENERAL_MODEL if general_loaded else self.FALLBACK_MODEL
+            )
+            if not medical_loaded and not general_loaded:
+                self._model = SentenceTransformer(self.FALLBACK_MODEL)
+                self._models_loaded.append(self.FALLBACK_MODEL)
+            elif medical_loaded:
+                self._model = self._medical_model
+            else:
+                self._model = self._general_model
+
+            logger.info("Single-embedding fallback: %s", fallback_name)
+
+            for specialty, queries in all_exemplars.items():
+                embeddings = self._model.encode(queries, convert_to_numpy=True)
+                avg = np.mean(embeddings, axis=0)
+                self._exemplar_embeddings[specialty] = avg / np.linalg.norm(avg)
 
     def _load_taxonomy_exemplars(self) -> None:
         """Load specialty structure from taxonomy.yaml to generate additional exemplars."""
@@ -189,8 +246,8 @@ class TextSignalModel:
         return await loop.run_in_executor(None, self._match_sync, messages)
 
     def _match_sync(self, messages: list[dict]) -> TextSignalResult:
-        """Synchronous specialty matching."""
-        if self._model is None:
+        """Synchronous specialty matching — dual or single embedding."""
+        if not self._dual_mode and self._model is None:
             return TextSignalResult(
                 matched_specialty="general.simple_qa",
                 similarity=0.0,
@@ -198,7 +255,6 @@ class TextSignalModel:
             )
 
         try:
-            # Extract text from the last user message
             query_text = self._extract_query_text(messages)
             if not query_text:
                 return TextSignalResult(
@@ -207,15 +263,28 @@ class TextSignalModel:
                     error="No text content found",
                 )
 
-            # Embed the query
-            query_embedding = self._model.encode(query_text, convert_to_numpy=True)
-            query_embedding = query_embedding / np.linalg.norm(query_embedding)
+            if self._dual_mode:
+                # Dual-embedding ensemble: max similarity across both models
+                med_emb = self._medical_model.encode(query_text, convert_to_numpy=True)
+                med_emb = med_emb / np.linalg.norm(med_emb)
+                gen_emb = self._general_model.encode(query_text, convert_to_numpy=True)
+                gen_emb = gen_emb / np.linalg.norm(gen_emb)
 
-            # Cosine similarity to each specialty
-            all_scores: dict[str, float] = {}
-            for specialty, emb in self._exemplar_embeddings.items():
-                sim = float(np.dot(query_embedding, emb))
-                all_scores[specialty] = sim
+                all_scores: dict[str, float] = {}
+                for specialty in set(list(self._medical_embeddings.keys()) + list(self._general_embeddings.keys())):
+                    med_score = float(np.dot(med_emb, self._medical_embeddings[specialty])) if specialty in self._medical_embeddings else 0.0
+                    gen_score = float(np.dot(gen_emb, self._general_embeddings[specialty])) if specialty in self._general_embeddings else 0.0
+                    # Max of both models — medical exemplars score higher on BioLORD,
+                    # general exemplars score higher on BGE
+                    all_scores[specialty] = max(med_score, gen_score)
+            else:
+                # Single-model fallback
+                query_embedding = self._model.encode(query_text, convert_to_numpy=True)
+                query_embedding = query_embedding / np.linalg.norm(query_embedding)
+                all_scores = {}
+                for specialty, emb in self._exemplar_embeddings.items():
+                    sim = float(np.dot(query_embedding, emb))
+                    all_scores[specialty] = sim
 
             best_specialty = max(all_scores, key=all_scores.get)  # type: ignore[arg-type]
             best_score = all_scores[best_specialty]

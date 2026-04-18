@@ -925,12 +925,7 @@ function toggleWhy(id, toggleEl) {
   }
 }
 
-var _seenTraces = {};
 function addTrace(t) {
-  // Deduplicate — same trace can arrive via API response + WebSocket
-  var tid = t.trace_id || t.trace_id || '';
-  if (tid && _seenTraces[tid]) return;
-  if (tid) _seenTraces[tid] = true;
 
   traceCount++;
   document.getElementById('trace-count').textContent = traceCount + ' traces';

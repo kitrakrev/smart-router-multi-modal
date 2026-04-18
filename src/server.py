@@ -456,7 +456,7 @@ def _simulate_signals(query: str, has_image: bool) -> dict[str, Any]:
         "cardiology": ["ecg", "ekg", "cardiac", "heart", "arrhythmia", "murmur", "mi"],
         "dermatology": ["skin", "rash", "mole", "lesion", "dermat", "melanoma"],
         "ophthalmology": ["eye", "retina", "fundus", "oct", "glaucoma", "vision"],
-        "emergency": ["trauma", "emergency", "acute", "stat", "code blue"],
+        "emergency": ["trauma", "emergency", "acute", "stat", "code blue", "cardiac arrest", "anaphylaxis", "stroke", "hemorrhage", "sepsis", "respiratory failure"],
         "pharmacology": ["drug", "medication", "dose", "interaction", "prescri"],
     }
     for spec, keywords in specialty_keywords.items():

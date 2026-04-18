@@ -120,6 +120,30 @@ class MedVisionRouter:
 
         decision.signals = self._pack_signals(signals)
 
+        # ── Step 1b: Auto-detect critical queries ───────────────────────
+        auto_critical = False
+        emergency_keywords = [
+            "emergency", "life-threatening", "code blue", "cardiac arrest",
+            "anaphylaxis", "stroke", "hemorrhage", "sepsis", "trauma",
+            "respiratory failure", "status epilepticus", "acute mi",
+        ]
+        query_text = self._extract_query_preview(messages, max_len=500).lower()
+        if any(kw in query_text for kw in emergency_keywords):
+            auto_critical = True
+        if signals.text.matched_specialty in (
+            "emergency", "medical.emergency", "emergency_medicine",
+        ):
+            auto_critical = True
+        if signals.complexity.complexity_score > 0.8:
+            auto_critical = True
+
+        if auto_critical and strategy != "critical":
+            # Auto-upgrade but allow explicit override
+            if budget_strategy is None:
+                strategy = "critical"
+                decision.budget_strategy = "critical"
+                logger.info("Auto-upgraded to critical strategy (emergency/complex)")
+
         # ── Step 2: Safety gate ──────────────────────────────────────────
         if not signals.safety.is_safe and signals.safety.risk_score > 0.8:
             decision.blocked = True
@@ -169,7 +193,11 @@ class MedVisionRouter:
         decision.inference_params = dict(prompt_result.params)
 
         # ── Step 7: Reasoning token budget ───────────────────────────────
-        if max_reasoning_tokens > 0:
+        if strategy == "critical":
+            # Critical strategy always allocates extended reasoning budget
+            decision.reasoning_tokens = max(max_reasoning_tokens, 4096)
+            decision.inference_params["max_tokens"] = decision.reasoning_tokens
+        elif max_reasoning_tokens > 0:
             decision.reasoning_tokens = max_reasoning_tokens
             decision.inference_params["max_tokens"] = max_reasoning_tokens
         elif signals.complexity.complexity_score > 0.7 and model.type == "reasoning":
@@ -294,6 +322,9 @@ class MedVisionRouter:
 
         if not capable:
             return None
+
+        if strategy == "critical":
+            return max(capable, key=lambda m: m.quality_score)
 
         if strategy == "cheapest_capable":
             return min(capable, key=lambda m: m.cost_per_1k_input + m.cost_per_1k_output)

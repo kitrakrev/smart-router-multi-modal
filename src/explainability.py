@@ -262,7 +262,11 @@ def _build_summary(decision: RoutingDecision, signals: dict) -> str:
     parts.append(f"({complexity} complexity)")
 
     parts.append(f"→ routed to {decision.model_name}")
-    parts.append(f"using {decision.budget_strategy} strategy")
+
+    if decision.budget_strategy == "critical":
+        parts.append("using CRITICAL strategy (highest-quality model, extended reasoning budget of 4096 tokens, latency constraints ignored)")
+    else:
+        parts.append(f"using {decision.budget_strategy} strategy")
 
     if decision.estimated_cost == 0:
         parts.append("(free, local model)")

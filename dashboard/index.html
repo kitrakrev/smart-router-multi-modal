@@ -982,10 +982,7 @@ function addTrace(t) {
     '</div>' +
     '<div class="trace-query">' + escHtml(t.query_preview || '') + '</div>' +
     '<div class="trace-signals">' +
-      '<div class="signal-chip">safety <span class="val" style="color:' + safetyColor + '">' + (t.safety_score||0).toFixed(2) + '</span></div>' +
-      '<div class="signal-chip">complexity <span class="val">' + (t.complexity_score||0).toFixed(2) + '</span></div>' +
       '<div class="signal-chip">image <span class="val">' + (t.image_type_detected || 'none') + '</span></div>' +
-      '<div class="signal-chip">tools <span class="val">' + (t.tools_suggested||[]).length + '</span></div>' +
     '</div>' +
     '<div class="trace-decision">' +
       '<div class="dec-cell">' +
@@ -1104,13 +1101,10 @@ var pipelineNodes = [
   { id:'input', x:30, y:150, w:110, label:'Input', color:'#38bdf8',
     desc:'User query (text + optional image)',
     detail:'Accepts OpenAI-format messages.\nExtracts text and image_url blocks.\nSupports multimodal content arrays.\nImages encoded as base64 data URIs.' },
-  { id:'safety', x:200, y:50, w:130, label:'Safety Gate', color:'#ef4444',
-    desc:'Regex + embedding jailbreak & PHI detection',
-    detail:'Layer 1: Regex patterns (<1ms) — catches "ignore instructions", SSN, MRN, DOB.\nLayer 2: Embedding cosine sim to unsafe exemplar centroid (~3ms).\nBlocks if risk_score > 0.8.\nFlags but passes 0.3-0.8.' },
-  { id:'vision', x:200, y:140, w:130, label:'Vision Embed', color:'#06b6d4',
+  { id:'vision', x:200, y:100, w:130, label:'Vision Embed', color:'#06b6d4',
     desc:'BioMedCLIP classifies medical image type',
     detail:'Model: BioMedCLIP (196M params, PubMedBERT + ViT-B/16).\nClassifies into: histology, xray, ct, mri, dermoscopy, fundus, ecg.\nCosine sim between image embedding and type centroids.\nNon-medical images get low score (<0.5) → routed to general model.' },
-  { id:'text', x:200, y:230, w:130, label:'Text Embed', color:'#38bdf8',
+  { id:'text', x:200, y:200, w:130, label:'Text Embed', color:'#38bdf8',
     desc:'Trained BioLORD routes to specialty (0.99 confidence)',
     detail:'Model: Fine-tuned BioLORD-2023 (109M params) trained on 9K medical images.\nDual ensemble with BGE-small-en-v1.5 for general queries.\nMax cosine sim across both models.\nSpecialties: pathology, radiology, dermatology + general.\nTrained accuracy: 100% on 4 domains.' },
   { id:'specialty', x:420, y:150, w:140, label:'Specialty Match', color:'#eab308',
@@ -1127,8 +1121,8 @@ var pipelineNodes = [
     detail:'Forwards to model_runner (H200 or A100) with specialty prompt.\nRecords latency in EMA stats tracker.\nBroadcasts trace via WebSocket.\nReturns OpenAI-compatible response with full routing metadata.' },
 ];
 var pipelineEdges = [
-  ['input','safety'],['input','vision'],['input','text'],
-  ['safety','specialty'],['vision','specialty'],['text','specialty'],
+  ['input','vision'],['input','text'],
+  ['vision','specialty'],['text','specialty'],
   ['specialty','model'],['specialty','prompt'],
   ['model','output'],['prompt','output'],
 ];

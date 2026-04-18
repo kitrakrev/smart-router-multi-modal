@@ -1,12 +1,12 @@
 # Model runner endpoint (H200 at 192.168.50.221:8001)
-model_runner_base: "http://192.168.50.221:8001"
+model_runner_base: "http://localhost:8001"
 
 models:
   - name: medgemma-4b
     type: specialist
     provider: model_runner
     model_id: google/medgemma-1.5-4b-it
-    api_base: "http://192.168.50.221:8001"
+    api_base: "http://localhost:8001"
     capabilities: [vision, medical, text]
     cost_per_1k_input: 0.05
     cost_per_1k_output: 0.15
@@ -17,7 +17,7 @@ models:
     type: specialist
     provider: model_runner
     model_id: microsoft/llava-med-v1.5-mistral-7b
-    api_base: "http://192.168.50.221:8001"
+    api_base: "http://localhost:8001"
     capabilities: [vision, medical, text]
     cost_per_1k_input: 0.07
     cost_per_1k_output: 0.21
@@ -28,7 +28,7 @@ models:
     type: specialist
     provider: model_runner
     model_id: medalpaca/medalpaca-7b
-    api_base: "http://192.168.50.221:8001"
+    api_base: "http://localhost:8001"
     capabilities: [medical, text]
     cost_per_1k_input: 0.07
     cost_per_1k_output: 0.21
@@ -39,7 +39,7 @@ models:
     type: generalist
     provider: model_runner
     model_id: meta-llama/Llama-3.1-8B-Instruct
-    api_base: "http://192.168.50.221:8001"
+    api_base: "http://localhost:8001"
     capabilities: [text, code, reasoning]
     cost_per_1k_input: 0.03
     cost_per_1k_output: 0.06

@@ -1,0 +1,84 @@
+{
+  "benchmark": "comprehensive_eval",
+  "total_samples": 5000,
+  "errors": 0,
+  "specialty_accuracy": 0.9723,
+  "specialty_total": 3500,
+  "specialty_breakdown": {
+    "ophthalmology": {
+      "accuracy": 1.0,
+      "total": 350
+    },
+    "reasoning": {
+      "accuracy": 0.608,
+      "total": 125
+    },
+    "simple_qa": {
+      "accuracy": 0.808,
+      "total": 125
+    },
+    "pharmacology": {
+      "accuracy": 1.0,
+      "total": 250
+    },
+    "emergency": {
+      "accuracy": 1.0,
+      "total": 750
+    },
+    "radiology": {
+      "accuracy": 1.0,
+      "total": 400
+    },
+    "general_medicine": {
+      "accuracy": 1.0,
+      "total": 250
+    },
+    "dermatology": {
+      "accuracy": 1.0,
+      "total": 350
+    },
+    "pathology": {
+      "accuracy": 1.0,
+      "total": 350
+    },
+    "creative": {
+      "accuracy": 1.0,
+      "total": 125
+    },
+    "code": {
+      "accuracy": 0.808,
+      "total": 125
+    },
+    "cardiology": {
+      "accuracy": 1.0,
+      "total": 300
+    }
+  },
+  "tool_accuracy": 0.75,
+  "tool_total": 500,
+  "safety_accuracy": 1.0,
+  "safety_total": 500,
+  "safety_false_positives": 0,
+  "safety_false_negatives": 0,
+  "critical_detection_rate": 0.9,
+  "critical_total": 500,
+  "complexity_accuracy": 0.9,
+  "complexity_total": 500,
+  "avg_reasoning_tokens_easy": 0.0,
+  "avg_reasoning_tokens_hard": 0.0,
+  "total_cost": 1102.929,
+  "avg_cost_per_query": 0.220586,
+  "cost_by_strategy": {
+    "balanced": 0.149114,
+    "critical": 0.61503
+  },
+  "model_distribution": {
+    "medgemma-4b": 4461,
+    "llama-3.1-8b": 489,
+    "": 50
+  },
+  "latency_avg_ms": 27.9,
+  "latency_p50_ms": 24.5,
+  "latency_p95_ms": 44.8,
+  "latency_p99_ms": 55.2
+}

@@ -151,11 +151,11 @@ async def test_tools_no_tools():
 # ── Text signal specialty matching ────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_text_cardiology():
+async def test_text_pathology():
     from src.signals.text import text_signal
     result = await text_signal([{"role": "user", "content":
-        "ST elevation in leads II III aVF with chest pain"}])
-    assert result.matched_specialty == "medical.cardiology"
+        "Histological features of adenocarcinoma in tissue biopsy"}])
+    assert result.matched_specialty == "medical.pathology"
     assert result.is_medical
     assert result.similarity > 0.3
 
@@ -398,8 +398,8 @@ async def test_explainability():
     prompt_manager.load_taxonomy(CONFIG / "taxonomy.yaml")
     router = MedVisionRouter()
     await router.initialize()
-    d = await router.route(messages=[{"role": "user", "content": "Drug interaction warfarin ciprofloxacin"}])
+    d = await router.route(messages=[{"role": "user", "content": "Analyze this tissue biopsy for cancer"}])
     exp = explain_decision(d)
-    assert "pharmacology" in exp.text.lower() or "medical" in exp.text.lower()
+    assert "pathology" in exp.text.lower() or "medical" in exp.text.lower()
     assert len(exp.signal_explanations) >= 5
     assert exp.model_selected != ""

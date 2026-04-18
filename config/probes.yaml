@@ -10,9 +10,6 @@ probes:
         expected_contains: ["consolidation", "infiltrate", "air bronchogram"]
       - q: "Describe signs of pneumothorax on X-ray."
         expected_contains: ["lucency", "lung marking", "pleural line"]
-    cardiology:
-      - q: "What ECG changes indicate acute MI?"
-        expected_contains: ["ST elevation", "Q wave", "T wave"]
     dermatology:
       - q: "What are the ABCDE criteria for melanoma?"
         expected_contains: ["asymmetry", "border", "color", "diameter", "evolution"]

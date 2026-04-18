@@ -130,10 +130,6 @@ class MedVisionRouter:
         query_text = self._extract_query_preview(messages, max_len=500).lower()
         if any(kw in query_text for kw in emergency_keywords):
             auto_critical = True
-        if signals.text.matched_specialty in (
-            "emergency", "medical.emergency", "emergency_medicine",
-        ):
-            auto_critical = True
         if signals.complexity.complexity_score > 0.8:
             auto_critical = True
 

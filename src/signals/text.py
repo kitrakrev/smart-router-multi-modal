@@ -17,12 +17,6 @@ CONFIG_DIR = Path(__file__).resolve().parent.parent.parent / "config"
 
 # Specialty exemplar queries for embedding-based matching
 SPECIALTY_EXEMPLARS: dict[str, list[str]] = {
-    "medical.cardiology": [
-        "chest pain with ST elevation on ECG",
-        "heart failure management and ejection fraction",
-        "atrial fibrillation rate control vs rhythm control",
-        "interpret this echocardiogram finding",
-    ],
     "medical.radiology": [
         "interpret this chest X-ray for pneumonia",
         "CT scan findings suggest pulmonary embolism",
@@ -40,24 +34,6 @@ SPECIALTY_EXEMPLARS: dict[str, list[str]] = {
         "rash differential diagnosis with distribution pattern",
         "dermoscopic features of melanoma vs nevus",
         "psoriasis treatment options and severity grading",
-    ],
-    "medical.ophthalmology": [
-        "diabetic retinopathy grading from fundus photo",
-        "glaucoma assessment with cup-to-disc ratio",
-        "macular degeneration wet vs dry classification",
-        "retinal detachment signs and management",
-    ],
-    "medical.emergency": [
-        "acute trauma assessment and triage",
-        "anaphylaxis emergency management protocol",
-        "stroke code rapid evaluation NIHSS",
-        "sepsis bundle and hemodynamic resuscitation",
-    ],
-    "medical.pharmacology": [
-        "drug interaction between warfarin and antibiotics",
-        "medication dosage adjustment for renal impairment",
-        "contraindications for beta blocker therapy",
-        "pharmacokinetics of new biologic agents",
     ],
     "medical.general_medicine": [
         "routine health screening recommendations",

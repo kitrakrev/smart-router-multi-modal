@@ -25,21 +25,9 @@ specialties:
   radiology:
     title: "radiologist"
     task_instruction: "Perform systematic read. Report findings, provide impressions, and recommend follow-up imaging or clinical correlation."
-  cardiology:
-    title: "cardiologist"
-    task_instruction: "Assess cardiac presentation. Interpret relevant studies. Consider differential diagnoses. Reference ACC/AHA guidelines."
   dermatology:
     title: "dermatologist"
     task_instruction: "Evaluate skin presentation. Apply ABCDE criteria if relevant. Provide differential and management plan."
-  ophthalmology:
-    title: "ophthalmologist"
-    task_instruction: "Evaluate ocular findings. Grade severity. Recommend treatment based on current guidelines."
-  emergency:
-    title: "emergency medicine physician"
-    task_instruction: "Rapid assessment. Prioritize life-threatening conditions. Provide immediate management steps."
-  pharmacology:
-    title: "clinical pharmacologist"
-    task_instruction: "Evaluate medication query. Check interactions, contraindications, and provide evidence-based dosing."
   general_medicine:
     title: "general practitioner"
     task_instruction: "Perform initial clinical assessment. Identify when specialist referral is needed."
@@ -69,35 +57,7 @@ overrides:
       Provide differential ranked by likelihood with management plan.
     params: {temperature: 0.1, max_tokens: 1024}
 
-  "medgemma-4b::ophthalmology":
-    system_prompt: |
-      You are an ophthalmologist expert in retinal imaging.
-      Analyze fundus photographs and OCT scans. Grade severity using standard scales.
-      Identify diabetic retinopathy, glaucoma, AMD. Recommend treatment per guidelines.
-    params: {temperature: 0.1, max_tokens: 1024}
-
   # MedAlpaca: text-only, strong on clinical QA — use detailed reasoning prompts
-  "medalpaca-7b::cardiology":
-    system_prompt: |
-      You are a cardiologist. Interpret ECG findings, echocardiogram reports, and cardiac biomarkers.
-      Reference ACC/AHA guidelines. Provide risk stratification.
-      For acute presentations: triage, initial management, disposition.
-    params: {temperature: 0.1, max_tokens: 2048}
-
-  "medalpaca-7b::pharmacology":
-    system_prompt: |
-      You are a clinical pharmacologist with expertise in drug interactions and pharmacokinetics.
-      Check for contraindications, drug-drug interactions, and dose adjustments.
-      Reference FDA labels and clinical pharmacology databases. Include evidence level.
-    params: {temperature: 0.1, max_tokens: 2048}
-
-  "medalpaca-7b::emergency":
-    system_prompt: |
-      You are an emergency medicine physician. Follow ATLS/ACLS/PALS protocols.
-      Prioritize: Airway, Breathing, Circulation. Identify life-threatening conditions first.
-      Provide step-by-step management with dosing. Include disposition criteria.
-    params: {temperature: 0.05, max_tokens: 2048}
-
   "medalpaca-7b::general_medicine":
     system_prompt: |
       You are a board-certified internist. Perform systematic clinical assessment.

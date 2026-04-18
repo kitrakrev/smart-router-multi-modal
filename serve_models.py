@@ -173,16 +173,34 @@ def generate_completion(model_info: dict, messages: List[ChatMessage],
         text_messages = [{"role": m.role, "content": m.content if isinstance(m.content, str) else " ".join(
             p.get("text", "") for p in m.content if isinstance(p, dict) and p.get("type") == "text"
         )} for m in messages]
-        prompt = tokenizer.apply_chat_template(
-            text_messages, tokenize=False, add_generation_prompt=True
-        )
+        # Try chat template (works for most models)
+        template_fn = getattr(tokenizer, "apply_chat_template", None)
+        if template_fn is None and hasattr(tokenizer, "tokenizer"):
+            template_fn = getattr(tokenizer.tokenizer, "apply_chat_template", None)
+        if template_fn:
+            prompt = template_fn(
+                text_messages, tokenize=False, add_generation_prompt=True
+            )
+        else:
+            prompt = build_prompt(messages)
     except Exception:
         prompt = build_prompt(messages)
 
     start = time.time()
 
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
-    inputs = {k: v.to(DEVICE) for k, v in inputs.items()}
+    # Handle AutoProcessor (MedGemma) vs regular tokenizer
+    is_processor = hasattr(tokenizer, "image_processor")
+    if is_processor:
+        inputs = tokenizer(text=prompt, return_tensors="pt", truncation=True, max_length=2048)
+    else:
+        inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=2048)
+    inputs = {k: v.to(DEVICE) for k, v in inputs.items() if isinstance(v, torch.Tensor)}
+
+    pad_id = getattr(tokenizer, "pad_token_id", None)
+    if pad_id is None:
+        pad_id = getattr(tokenizer, "eos_token_id", None)
+        if pad_id is None and hasattr(tokenizer, "tokenizer"):
+            pad_id = getattr(tokenizer.tokenizer, "eos_token_id", 0)
 
     with torch.no_grad():
         outputs = model.generate(
@@ -191,12 +209,13 @@ def generate_completion(model_info: dict, messages: List[ChatMessage],
             temperature=max(temperature, 0.01),
             top_p=top_p,
             do_sample=temperature > 0.01,
-            pad_token_id=tokenizer.pad_token_id or tokenizer.eos_token_id,
+            pad_token_id=pad_id or 0,
         )
 
     input_len = inputs["input_ids"].shape[1]
     generated = outputs[0][input_len:]
-    response_text = tokenizer.decode(generated, skip_special_tokens=True).strip()
+    decode_fn = tokenizer.decode if hasattr(tokenizer, "decode") else tokenizer.tokenizer.decode
+    response_text = decode_fn(generated, skip_special_tokens=True).strip()
 
     elapsed = time.time() - start
     prompt_tokens = input_len

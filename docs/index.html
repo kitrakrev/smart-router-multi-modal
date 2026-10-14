@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Smart Router Multi-Modal</title><meta name="description" content="Multi-modal LLM router with vision, tools, and real-time tracing — routes each query to the optimal model by embedding similarity to decision exemplars.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f7f6f2;--panel:#fff;--ink:#1d1d1f;--muted:#6b6b70;--line:#e3e1da;--accent:#00684a;--side:#0f1f1a;--sideink:#d7e7df}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121413;--panel:#1b1e1c;--ink:#ecece8;--muted:#9a9c98;--line:#2c302d;--accent:#4fc08d;--side:#0a1410}}
+*{box-sizing:border-box}body{margin:0;font:15px/1.55 Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--side);color:var(--sideink);padding:40px 16px 32px}
+.wrap{max-width:900px;margin:0 auto;padding:0 16px}
+header .wrap{padding:0}
+header h1{color:#fff;margin:0 0 6px;font-size:32px;letter-spacing:-.01em}
+header p{margin:0 0 16px;opacity:.85;font-size:16px}
+.btns a{display:inline-block;margin:0 8px 8px 0;padding:7px 14px;border-radius:8px;text-decoration:none;font-size:14px;border:1px solid #2f5a49;color:#fff}
+.btns a.pri{background:#00684a;border-color:#00684a}
+main{padding:24px 16px 40px}
+h2{font-size:19px;margin:28px 0 10px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;margin-bottom:14px}
+ul{margin:6px 0;padding-left:20px}li{margin:4px 0}
+.flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.flow span{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);border-radius:7px;padding:6px 10px;font-size:13px}
+.flow i{color:var(--muted);font-style:normal}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{color:var(--muted);font-weight:600}.tw{overflow-x:auto}
+.pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12.5px;border:1px solid var(--line);margin:0 6px 6px 0;background:var(--panel)}
+.muted{color:var(--muted)}code{font-family:ui-monospace,Menlo,monospace;font-size:13px}
+a{color:var(--accent)}footer{border-top:1px solid var(--line);padding:18px 16px;color:var(--muted);font-size:13px}
+@media (max-width:600px){header h1{font-size:26px}}
+</style></head><body>
+<header><div class="wrap"><h1>Smart Router Multi-Modal</h1><p>Multi-modal LLM router with vision, tools, and real-time tracing — routes each query to the optimal model by embedding similarity to decision exemplars.</p>
+<div class="btns"><a class="pri" href="https://github.com/kitrakrev/smart-router-multi-modal">View on GitHub</a><a href="https://kitrakrev.github.io/">&larr; kitrakrev.github.io</a></div></div></header>
+<main class="wrap">
+<h2>What it does</h2><div class="card"><p>An LLM routing layer that sits between an application and multiple LLM providers. Instead of hardcoding which model handles which query, it extracts signals from the query, matches it to a task type, and picks the cheapest capable model — complex math goes to reasoning models, simple QA to small local models, vision queries to multimodal models.</p><ul><li>9 signal extractors: keyword, domain, complexity, language, safety, PII, vision, tool, modality</li><li>Budget strategies: <code>cheapest_capable</code>, <code>quality_first</code>, <code>balanced</code>, <code>performance_weighted</code></li><li>Adaptive, EMA-based health tracking that auto-disables and recovers degraded models</li><li>Dynamic model registry, hot-reloadable YAML config, OpenAI-compatible <code>/v1/chat/completions</code></li><li>Real-time dashboard (traces, pipeline, models, stats, sessions, config, datasets) and 11 built-in tools</li></ul></div>
+<h2>How it works</h2><div class="card"><div class="flow"><span>Query</span> <i>&rarr;</i> <span>Guardrails</span> <i>&rarr;</i> <span>Signal extractors</span> <i>&rarr;</i> <span>Decision matcher</span> <i>&rarr;</i> <span>Capability filter</span> <i>&rarr;</i> <span>Budget selection</span> <i>&rarr;</i> <span>Model</span></div><ul><li><b>Layer 1 — what task?</b> Decision exemplars in <code>config/config.yaml</code> are embedded with <code>all-MiniLM-L6-v2</code>; the query is matched to the nearest decision centroid by cosine similarity (vLLM-SR style).</li><li><b>Layer 2 — which model?</b> The model pool is filtered to those with every required capability (e.g. <code>[vision]</code>, <code>[reasoning, code]</code>), then the decision's budget strategy picks one.</li><li><b>Layer 3 — how to call?</b> The decision's inference config (temperature, max_tokens, reasoning, thinking tokens) is passed through to the model call.</li><li>Safety guardrails (jailbreak, PII) run first; adaptive routing tracks model health over time.</li></ul></div>
+<h2>Key results</h2><div class="card"><div class='tw'><table><tr><th>Benchmark</th><th>Metric</th><th>Value</th></tr><tr><td>RouterArena (overlap, 809 queries)</td><td>Routing accuracy</td><td><b>86.8%</b></td></tr><tr><td>RouterArena</td><td>Avg routing latency / cost per 1K queries</td><td>15ms / $0.25</td></tr><tr><td>VL-RouterBench (14 datasets, 17 VLMs)</td><td>Routing accuracy / rank score</td><td><b>83.8%</b> / 0.80</td></tr><tr><td>vLLM-SR baseline, same RouterArena data</td><td>Accuracy / latency / cost per 1K</td><td>69.1% / 22ms / $0.31</td></tr></table></div><p class="muted" style="margin:10px 0 0;font-size:13px">As reported in the repository README.</p></div>
+<h2>Tech stack</h2><div><span class="pill">Python</span><span class="pill">FastAPI-style server</span><span class="pill">sentence-transformers (MiniLM)</span><span class="pill">YAML config</span><span class="pill">uv</span><span class="pill">Hugging Face embeddings</span></div>
+
+</main>
+<footer><div class="wrap">Source: <a href="https://github.com/kitrakrev/smart-router-multi-modal">github.com/kitrakrev/smart-router-multi-modal</a> &middot; <a href="https://kitrakrev.github.io/">kitrakrev.github.io</a></div></footer>
+</body></html>
